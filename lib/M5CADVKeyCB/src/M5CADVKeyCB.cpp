@@ -13,6 +13,8 @@ void M5CADVKeyCB::KeyboardUpdate() {
       uint8_t* currentKeys = status.hid_keys.data();
       uint8_t currentCount = status.hid_keys.size();
 
+      if (status.opt){KeyboardCallback(0,true);} // lazy opt implementation, change later on.
+
       // pressed
       for (uint8_t i = 0; i < currentCount; i++){
         uint8_t key = currentKeys[i];
