@@ -1,10 +1,37 @@
 # CardStudio RoadMap #
 This is a roadmap listing all my goals for this proyect, current status, things to do, additional features and more.
 
+## Current TODO ###
+- [ )update synth core to add planned changes.
+- [ ] added looping samples to synthcore.
+re organize SynthCore structs.
+- [ ] update PCM-MCU-C to add new sample format ".pcm" as default output.
+
+[ ] move channel specific configuration into a ChannelData struct for less nesting and simpler code, and a unified setter.
+
+- [ ] for SynthCore new sample end/loop handling, I will do the following:
+
+If we stop the voice, and we arent sustaining on this channel and we arent a looping voice, stop immediately, 
+if we are a looping voice, continue until sample ends.
+
+if we stop the voice and we are sustaining but we arent a looping voice, continue the sample until it ends, raise "releasing" bool to true
+
+if we are a looping voice, then ignore raise the "released" bool to true.
+
+
+We check at the RemoveVoice() if we have the "released" flag, if we do and we arent at sustain, we do nothing and remove the voice at the voice synthesis stage for when the voice stops.
+
+if we are sustaining and we try to remove the voice and we are a looping voice, then we dont remove it, but raise the "releasing" flag to true.
+
+at voice synthsis if we have "releasing" flag set to true, we wait until sample end and then kill the voice.
+
+ 
+
+
 ## App plans ##
-- [] Freeplay
-- [] MidiPlayer
-- [] MiniDaw
+- [ ] Freeplay
+- [ ] MidiPlayer
+- [ ] MiniDaw
 
 ## Folder Structure ##
 
@@ -27,7 +54,7 @@ Uint8_t BitDepth;  uint16_t SampleRate; bool Looping; LoopA; LoopB;
 
 ## Core Systems ##
 
-- [] SynthCore Helpers:
+- [ ] SynthCore Helpers:
 For handling multiple channels, sample swaps and loading.
 
 Channel_Instumets[16]
@@ -44,7 +71,7 @@ As it name says we simply get the SampleData Struct from the specified channel S
 We first pass it through the GetSIDOrfallback()
 Then we grab the returned ID and grab the SampleData from Instruments or Percussion arrays, corresponding to the is_percussion bool.
 
-- [] ## MidiHCB ( Midi Humanizer) ##
+- [ ] ## MidiHCB ( Midi Humanizer) ##
 This class will be in the handling of turning a Midi raw value like 0x90 into a readable value like NoteOn, Channel 10.
 
 We are going to use a callback system for managing the Routing to SynthCore, with some predictable functions like
@@ -53,7 +80,7 @@ MidiHM.setup() (mode set, like Serial, or Translator, feeding via another functi
 MidiHM.feedData(uint8_t, uint8_t)
 MidiHM.loop() (only used at serial mode)
 
-- [] GetSIDOrfallback()
+- [ ] GetSIDOrfallback()
 This function takes the SID and returns a valid SID.
 Why is this needed:
 Because this world is not perfect and we don always have all the instruments we ask for, and playing silence would be a bad for the user experience,
@@ -69,7 +96,7 @@ If there isnt a neighbor, we return the SID 255 wich is EmbeddedSineWave (Fallba
 This way we avoid silence in a smart way, and enhance user experience due to the tight storage conditions.
 
 
-- [] ## SMU (Storage Management  Unit) ##
+- [ ] ## SMU (Storage Management  Unit) ##
 This will be a simple wrapper of the used storage option, in this case i will use LittleFS.
 
 Here's why:
@@ -77,22 +104,22 @@ due to the very small amount of RAM and the lack of Built-in PSRAM for the CardP
 I needed a proper way to quickly access samples since sd card is slow, in this specific case littleFS is perfect.
 
 Functions:
-- [] LoadSamples()
+- [ ] LoadSamples()
 This function is going to take every sample loaded into LittleFS and store them into the instrument or percussion arrays via a SampleData struct.
 
-- [] UploadSample()
+- [ ] UploadSample()
 This function needs as an argument a directory for the specific sample pack to load, this will remove all stored samples every time to combat tight storage.
 
 -[] ClearStorage()
 Deletes all of the stored samples.
 
 
-- [] ### SynthCore ###
+- [ ] ### SynthCore ###
 Synth Core is the pure math engine that handles the processing of voices and instruments, nothing is hardware specific.
 
- - [] VoiceHandling
-  - [] Voice Stealing
-  - [] Voice ID
+ - [ ] VoiceHandling
+  - [ ] Voice Stealing
+  - [ ] Voice ID
 
  - [x] Helper functions
   - [x] AddVoice()
@@ -101,7 +128,7 @@ Synth Core is the pure math engine that handles the processing of voices and ins
   - [x] UpdateAudioBuffer[]
   - [x] SetChannelPitchBend()
 
-- [] Struct System for managing samples and configuration, will behave as following:
+- [ ] Struct System for managing samples and configuration, will behave as following:
 
 
 Struct SampleData{ *sample; *sample len: bool looping; loopA; LoopB;}
