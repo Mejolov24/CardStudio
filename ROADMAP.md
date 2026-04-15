@@ -17,8 +17,7 @@ re organize SynthCore structs.
 
 - [ ] SortedVID
 an array of VoicesID soterrada in time, oldest sample is the first one, newest is the    
-rightmost
-Actually, it will use a RingBuffer
+rightmost one.
 
 
 Now addVoice will remove voices via RemoveVoice[VID]
