@@ -1,6 +1,11 @@
 # CardStudio RoadMap #
 This is a roadmap listing all my goals for this proyect, current status, things to do and additional features.
 
+## Future TODO ##
+- [ ] Add USB OTG midi support.
+- [ ] allow for 8 bit samples
+
+
 ## Current TODO ###
 - [ ] update synth core to add planned changes.
 re organize SynthCore structs.
@@ -13,11 +18,12 @@ re organize SynthCore structs.
 - [ ] SortedVID
 an array of VoicesID soterrada in time, oldest sample is the first one, newest is the    
 rightmost
+Actually, it will use a RingBuffer
 
 
 Now addVoice will remove voices via RemoveVoice[VID]
 
--[ ] Create a helper for removing voices in specific channels, called RemoveVoiceFromCh[]
+- [ ] Create a helper for removing voices in specific channels, called RemoveVoiceFromCh[]
 wich will search for the matching voice and channel inside SortedVID from rigth to left, and delete it, then return in order to only delete one.
 
 - [ ] implement voice stealing.
