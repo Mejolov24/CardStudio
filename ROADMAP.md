@@ -26,6 +26,7 @@ when the voices are full, delete the oldest VID at SortedVID(first element), and
 
 - [ ] (SynthCore) New sample end/loop handling, I will do the following:
 
+IMPLEMENT ALL OF THIS INSIDE REMOVEVOICE()
 
 If we stop the voice, and we arent sustaining on this channel and we arent a looping voice, stop immediately, 
 if we are a looping voice, continue until sample ends.
@@ -87,14 +88,13 @@ As it name says we simply get the SampleData Struct from the specified channel S
 We first pass it through the GetSIDOrfallback()
 Then we grab the returned ID and grab the SampleData from Instruments or Percussion arrays, corresponding to the is_percussion bool.
 
-- [ ] ## MidiHCB ( Midi Humanizer) ##
+- [ ] ## MidiParser ##
 This class will be in the handling of turning a Midi raw value like 0x90 into a readable value like NoteOn, Channel 10.
 
 We are going to use a callback system for managing the Routing to SynthCore, with some predictable functions like
 
-MidiHM.setup() (mode set, like Serial, or Translator, feeding via another function)
-MidiHM.feedData(uint8_t, uint8_t)
-MidiHM.loop() (only used at serial mode)
+MidiParser.feedData(uint8_t, uint8_t) (Manual)
+MidiParser.SeialLoop() (Auto, Via Serial using my own script or Hairless midi serial)
 
 - [ ] GetSIDOrfallback()
 This function takes the SID and returns a valid SID.
