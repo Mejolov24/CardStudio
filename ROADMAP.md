@@ -1,15 +1,31 @@
 # CardStudio RoadMap #
-This is a roadmap listing all my goals for this proyect, current status, things to do, additional features and more.
+This is a roadmap listing all my goals for this proyect, current status, things to do and additional features.
 
 ## Current TODO ###
-- [ )update synth core to add planned changes.
-- [ ] added looping samples to synthcore.
+- [ ] update synth core to add planned changes.
 re organize SynthCore structs.
 - [ ] update PCM-MCU-C to add new sample format ".pcm" as default output.
 
-[ ] move channel specific configuration into a ChannelData struct for less nesting and simpler code, and a unified setter.
+- [ ] (SynthCore) move channel specific configuration into a ChannelData struct for less nesting and simpler code, and a unified setter.
 
-- [ ] for SynthCore new sample end/loop handling, I will do the following:
+- [ ] (SynthCore) Move into VID (Voice ID) for voice management
+
+- [ ] SortedVID
+an array of VoicesID soterrada in time, oldest sample is the first one, newest is the    
+rightmost
+
+
+Now addVoice will remove voices via RemoveVoice[VID]
+
+-[ ] Create a helper for removing voices in specific channels, called RemoveVoiceFromCh[]
+wich will search for the matching voice and channel inside SortedVID from rigth to left, and delete it, then return in order to only delete one.
+
+- [ ] implement voice stealing.
+when the voices are full, delete the oldest VID at SortedVID(first element), and store the voice there.
+
+
+- [ ] (SynthCore) New sample end/loop handling, I will do the following:
+
 
 If we stop the voice, and we arent sustaining on this channel and we arent a looping voice, stop immediately, 
 if we are a looping voice, continue until sample ends.
@@ -110,11 +126,11 @@ This function is going to take every sample loaded into LittleFS and store them 
 - [ ] UploadSample()
 This function needs as an argument a directory for the specific sample pack to load, this will remove all stored samples every time to combat tight storage.
 
--[] ClearStorage()
+- [ ] ClearStorage()
 Deletes all of the stored samples.
 
 
-- [ ] ### SynthCore ###
+- [ ] ## SynthCore ##
 Synth Core is the pure math engine that handles the processing of voices and instruments, nothing is hardware specific.
 
  - [ ] VoiceHandling
