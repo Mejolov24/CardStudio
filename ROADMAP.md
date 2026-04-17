@@ -70,13 +70,6 @@ At this directory, the user will provide the sample packs, wich is simply a fold
 SamplePacks/YourSamplePack/instruments
 SamplePacks/YourSamplePack/Percussion
 
-## Sample Format ##
-
-Converted via PCM-MCU-C:
-My own Sample format called ".pcm"
-Wich is almost exactly like .wav, but with a fixed header in this extructure, using very little processing power since its uncompressed, containing only the necessary things for a sample, wheter its a sound effect, a voice, or an instrument like the violin or the piano.
-
-Uint8_t BitDepth;  uint16_t SampleRate; bool Looping; LoopA; LoopB;
 
 ## Core Systems ##
 
@@ -122,21 +115,23 @@ This way we avoid silence in a smart way, and enhance user experience due to the
 
 
 - [ ] ## SMU (Storage Management  Unit) ##
-This will be a simple wrapper of the used storage option, in this case i will use LittleFS.
 
-Here's why:
-due to the very small amount of RAM and the lack of Built-in PSRAM for the CardPuter ADV
-I needed a proper way to quickly access samples since sd card is slow, in this specific case littleFS is perfect.
+Due to the little amount of RAM, we will pack all samples into a .bin file, then load it at runtime using mmap, similar to what gamestation does.
+this file will be generated with a python script.
+
+SampleData structure"
+
+Uint8_t BitDepth;  uint16_t SampleRate; bool Looping; LoopA; LoopB;
 
 Functions:
-- [ ] LoadSamples()
-This function is going to take every sample loaded into LittleFS and store them into the instrument or percussion arrays via a SampleData struct.
+- [ ] LoadSamplePack()
+This will read the currently stored samples pack, and make it accesible.
 
-- [ ] UploadSample()
+- [ ] UploadSamplePack()
 This function needs as an argument a directory for the specific sample pack to load, this will remove all stored samples every time to combat tight storage.
 
 - [ ] ClearStorage()
-Deletes all of the stored samples.
+Deletes the stored samples pack.
 
 
 - [ ] ## SynthCore ##
