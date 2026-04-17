@@ -10,8 +10,7 @@ This is a roadmap listing all my goals for this proyect, current status, things 
 - [ ] update synth core to add planned changes.
 re organize SynthCore structs.
 
-- [ ] update PCM-MCU-C to add new sample format ".pcm" as default output.
-To makebthis format, simply read inside the for loop, grabbing the current audio file, Decoding itsnheader and storing it inside a variable, when the file is converted add the header then continue with the other files.
+- [ ] create PCM-MCU-C branch called packer
 
 make that if you dont input anything under filepath, grab all files from /input
 
