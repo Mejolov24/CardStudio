@@ -10,7 +10,7 @@ This is a roadmap listing all my goals for this proyect, current status, things 
 - [ ] update synth core to add planned changes.
 re organize SynthCore structs.
 
-- [ ] create PCM-MCU-C branch called packer
+- [x] create PCM-MCU-C V2.1 to support .bin packing
 
 make that if you dont input anything under filepath, grab all files from /input
 
