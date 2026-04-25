@@ -113,25 +113,10 @@ If there isnt a neighbor, we return the SID 255 wich is EmbeddedSineWave (Fallba
 This way we avoid silence in a smart way, and enhance user experience due to the tight storage conditions.
 
 
-- [ ] ## SMU (Storage Management  Unit) ##
+- [x] ## FMU (Flash Management  Unit) ##
 
 Due to the little amount of RAM, we will pack all samples into a .bin file, then load it at runtime using mmap, similar to what gamestation does.
 this file will be generated with a python script.
-
-SampleData structure"
-
-Uint8_t BitDepth;  uint16_t SampleRate; bool Looping; LoopA; LoopB;
-
-Functions:
-- [ ] LoadSamplePack()
-This will read the currently stored samples pack, and make it accesible.
-
-- [ ] UploadSamplePack()
-This function needs as an argument a directory for the specific sample pack to load, this will remove all stored samples every time to combat tight storage.
-
-- [ ] ClearStorage()
-Deletes the stored samples pack.
-
 
 - [ ] ## SynthCore ##
 Synth Core is the pure math engine that handles the processing of voices and instruments, nothing is hardware specific.
