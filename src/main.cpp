@@ -1,188 +1,193 @@
-#include <Arduino.h>
-#include "M5Cardputer.h"
-M5Canvas canvas(&M5.Lcd);
-#include <map>
-#include "Keyboardmap.h"
+#include <M5Cardputer.h>
+#include <SPI.h>
+#include <SD.h>
+#include "esp_partition.h"
 
-#include <M5CADVKeyCB.h>
-M5CADVKeyCB keyHandler;
-#include <SynthCore.h>
-SynthCore synth;
-using voiceCfg = SynthCore::VoiceConfig; 
+// --- SD PINS ---
+#define SD_SPI_SCK_PIN  40
+#define SD_SPI_MISO_PIN 39
+#define SD_SPI_MOSI_PIN 14
+#define SD_SPI_CS_PIN   12
 
-#include "built-in-samples.h"
-
-#define SAMPLE_RATE 22050
-int16_t audio_buffer[512];
-
-static int32_t Disw;
-static int32_t Dish;
-static int32_t Disa; // display area
-
-uint8_t octave = 3;
-uint8_t transpose = 0;
-uint8_t instrument_index = 0;
-uint8_t base_note = 48;
-uint8_t volume = 255;
-bool at_settings = false;
-
-struct Sample { // add this later on to main library.
-  const char* name;
-  const int16_t* sample;
-  uint32_t sample_len;
-  bool is_loop; // yet to be implemented
-  uint32_t loop_start;
-  uint32_t loop_end;
+// --- STRUCT (20 bytes, MUST MATCH PYTHON) ---
+struct SampleData {
+    const char* name;
+    const int16_t* data;
+    uint32_t length;
+    uint32_t loop_start;
+    uint32_t loop_end;
+};
+struct __attribute__((packed)) SampleDataRaw {
+    uint32_t name;
+    uint32_t data;
+    uint32_t length;
+    uint32_t loop_start;
+    uint32_t loop_end;
 };
 
-Sample builtInSamples[] = {
-  {"Ocarina", ocarina, ocarina_len },
-  {"Piano", piano, piano_len },
-  {"Organ", organ, organ_len },
-  {"Guitar", guitar, guitar_len }
-};
+// --- GLOBALS ---
+SampleData instruments[128];
+SampleData percussion[128];
 
-#define TEXT_COLOR_2 0x005a
-#define TEXT_COLOR 0x761f
-#define BG_COLOR 0xe71c
-#define TEXT_FONT &fonts::Font4 // 26 px in height
+uintptr_t flash_base = 0;
+spi_flash_mmap_handle_t mmap_handle;
 
-void update_ui(){
-  canvas.clearDisplay();
-  if(!at_settings){
-    canvas.pushSprite(0,0);
-    return;
-  }
-  canvas.setAddrWindow(0, 0, Disw, Dish);
-  canvas.setTextColor(TEXT_COLOR);
-  canvas.drawString("Instrument :",0, 0, TEXT_FONT);
-  canvas.setTextColor(TEXT_COLOR_2);
-  canvas.drawString(builtInSamples[instrument_index].name, (Disw / 2) + 20,0, TEXT_FONT);
-  canvas.setTextColor(TEXT_COLOR);
-  canvas.drawString("Octave :",0,26,TEXT_FONT);
-  canvas.setTextColor(TEXT_COLOR_2);
-  canvas.drawString(String(octave), (Disw / 2) + 20,26, TEXT_FONT);
-  canvas.setTextColor(TEXT_COLOR);
-  canvas.drawString("Transpose :",0,52,TEXT_FONT);
-  canvas.setTextColor(TEXT_COLOR_2);
-  canvas.drawString(String(transpose), (Disw / 2) + 20,52, TEXT_FONT);
-  canvas.setTextColor(TEXT_COLOR);
-  canvas.drawString("Base note :",0,78,TEXT_FONT);
-  canvas.setTextColor(TEXT_COLOR_2);
-  canvas.drawString(String(base_note), (Disw / 2) + 20,78, TEXT_FONT);
-  canvas.setTextColor(TEXT_COLOR);
-  canvas.drawString("Volume :",0,104,TEXT_FONT);
-  canvas.setTextColor(TEXT_COLOR_2);
-  canvas.drawString(String(volume), (Disw / 2) + 20,104, TEXT_FONT);
+uint32_t g_sample_rate = 22050;
+uint32_t g_bit_depth   = 16;
+uint32_t g_num_dirs    = 0;
 
-  canvas.pushSprite(0,0);
+bool burnSamplePack(const char* path) {
+    File file = SD.open(path);
+    if (!file) {
+        Serial.println("SD: File not found!");
+        return false;
+    }
+
+    const esp_partition_t* part = esp_partition_find_first(
+        (esp_partition_type_t)0x40, ESP_PARTITION_SUBTYPE_ANY, "samples");
+
+    if (!part) {
+        Serial.println("Partition 'samples' missing!");
+        return false;
+    }
+
+    if (file.size() > part->size) {
+        Serial.println("ERROR: SPACK too large!");
+        return false;
+    }
+
+    Serial.println("Burning to Flash...");
+
+    size_t erase_size = ((file.size() + 4095) / 4096) * 4096;
+    esp_partition_erase_range(part, 0, erase_size);
+
+    uint8_t buffer[4096];
+    size_t offset = 0;
+
+    while (file.available()) {
+        size_t readLen = file.read(buffer, sizeof(buffer));
+        esp_partition_write(part, offset, buffer, readLen);
+        offset += readLen;
+    }
+
+    file.close();
+    Serial.println("Burn complete.");
+    return true;
 }
 
-void play_note_hid(uint8_t key, bool pressed){
-  auto it = hidNoteMap.find(key);
-  if (it == hidNoteMap.end()) return;
-  if (pressed){
-  voiceCfg voice;
-  voice.note = hidNoteMap[key]+base_note;
-  voice.sample = builtInSamples[instrument_index].sample;
-  voice.sample_length = builtInSamples[instrument_index].sample_len;
-  synth.addVoice(voice);
-}
-  else{synth.removeVoice(hidNoteMap[key]+base_note,0);}
-}
+void mapSamplePack() {
+    const esp_partition_t* part = esp_partition_find_first(
+        (esp_partition_type_t)0x40, ESP_PARTITION_SUBTYPE_ANY, "samples");
 
-void OnKey(uint8_t key, bool pressed){
-  Serial.print(key);
-  Serial.print(" ");
-  Serial.print(pressed);
-  Serial.println();
-  Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-if (status.opt){
-  at_settings = !at_settings;
-}
-if (!at_settings){
-play_note_hid(key,pressed);
-}
-else if(pressed){
-switch (key)
-{
-case 51:
-  octave ++;
-  break;
+    if (!part) {
+        Serial.println("Partition not found!");
+        return;
+    }
 
-  case 55:
-  octave --;
-  break;
+    esp_err_t err = esp_partition_mmap(
+        part, 0, part->size,
+        SPI_FLASH_MMAP_DATA,
+        (const void**)&flash_base,
+        &mmap_handle
+    );
 
-  case 54:
-  transpose --;
-  break;
+    if (err != ESP_OK) {
+        Serial.printf("mmap failed: %d\n", err);
+        return;
+    }
 
-  case 56:
-  transpose ++;
-  break;
+    // --- HEADER ---
+char magic[5] = {0};
+    memcpy(magic, (void*)flash_base, 4);
+    Serial.printf("Magic: %s\n", magic);
 
-  case 29:
-  instrument_index --;
-  break;
+    if (strcmp(magic, "SPK1") != 0) {
+        Serial.println("Invalid SPACK!");
+        // Add this to see what is actually there:
+        for(int i=0; i<16; i++) Serial.printf("%02X ", ((uint8_t*)flash_base)[i]);
+        Serial.println();
+        return;
+    }
 
-  case 27:
-  instrument_index ++;
-  break;
-  
-  case 45:
-  volume -= 14;
-  break;
+    g_num_dirs    = *(uint32_t*)(flash_base + 4);
+    g_sample_rate = *(uint32_t*)(flash_base + 8);
+    g_bit_depth   = *(uint32_t*)(flash_base + 12);
 
-  case 46:
-  volume += 14;
-  break;
+    Serial.printf("Dirs=%u SR=%u BD=%u\n",
+        g_num_dirs, g_sample_rate, g_bit_depth);
 
-default:
-  break;
-}
-}
-octave = (octave % 10 + 10) % 10;
-transpose = (transpose % 12 + 12) % 12;
-instrument_index = (instrument_index % 4 + 4) % 4;
-base_note = (octave * 12) + transpose;
-M5.Speaker.setVolume(volume);
-if(instrument_index == 0){
-  synth.setBaseNote(60);
-}
-else{synth.setBaseNote(69);}
-update_ui();
+    uint32_t* directory = (uint32_t*)(flash_base + 16);
+
+    if (g_num_dirs < 2) {
+        Serial.println("Not enough banks!");
+        return;
+    }
+
+    uint32_t inst_offset = directory[0];
+    uint32_t perc_offset = directory[1];
+
+    // --- TEMP RAW BUFFERS ---
+    SampleDataRaw raw_inst[128];
+    SampleDataRaw raw_perc[128];
+
+    memcpy(raw_inst, (void*)(flash_base + inst_offset), sizeof(raw_inst));
+    memcpy(raw_perc, (void*)(flash_base + perc_offset), sizeof(raw_perc));
+
+    // --- CONVERT RAW → RUNTIME ---
+    for (int i = 0; i < 128; i++) {
+        // Instruments
+        if (raw_inst[i].length > 0) {
+            instruments[i].length     = raw_inst[i].length;
+            instruments[i].loop_start = raw_inst[i].loop_start;
+            instruments[i].loop_end   = raw_inst[i].loop_end;
+
+            instruments[i].data = (const int16_t*)(flash_base + raw_inst[i].data);
+            instruments[i].name = (const char*)(flash_base + raw_inst[i].name);
+        } else {
+            instruments[i].length = 0;
+        }
+
+        // Percussion
+        if (raw_perc[i].length > 0) {
+            percussion[i].length     = raw_perc[i].length;
+            percussion[i].loop_start = raw_perc[i].loop_start;
+            percussion[i].loop_end   = raw_perc[i].loop_end;
+
+            percussion[i].data = (const int16_t*)(flash_base + raw_perc[i].data);
+            percussion[i].name = (const char*)(flash_base + raw_perc[i].name);
+        } else {
+            percussion[i].length = 0;
+        }
+    }
+
+    Serial.println("Audio system ready.");
 }
 
 void setup() {
-  Serial.begin(9600);
-  auto cfg = M5.config();
-  M5Cardputer.begin(cfg, true);
-  M5.Speaker.begin();
-  M5.Speaker.setVolume(255);
+    auto cfg = M5.config();
+    M5Cardputer.begin(cfg);
 
-  keyHandler.SetupKeyboardCallback(OnKey);
-  synth.setBaseNote(60);
+    Serial.begin(115200);
+    delay(2000);
 
-    synth.updateAudioBuffer(audio_buffer, 512);
-  M5.Speaker.playRaw(audio_buffer, 512, SAMPLE_RATE);
+    Serial.println("--- CARDSTUDIO START ---");
 
-  // Setup rendering
-  Disw = M5.Lcd.width();
-  Dish = M5.Lcd.height();
-  Disa = Dish * Disw;
-  canvas.createSprite(240, 135);
+    M5.Speaker.setVolume(128);
+
+    SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+
+    if (!SD.begin(SD_SPI_CS_PIN, SPI, 25000000)) {
+        Serial.println("SD failed!");
+        return;
+    }
+
+    Serial.println("SD OK.");
+
+    burnSamplePack("/AppData/CardStudio/SamplePacks/output.spack");
+
+    mapSamplePack();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  M5Cardputer.update();
-  keyHandler.KeyboardUpdate();
-
-  if (!M5.Speaker.isPlaying()) {
-  synth.updateAudioBuffer(audio_buffer, 512);
-  M5.Speaker.playRaw(audio_buffer, 512, SAMPLE_RATE);}
-
-
+    M5Cardputer.update();
 }
-
