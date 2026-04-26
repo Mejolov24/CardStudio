@@ -14,7 +14,7 @@ re organize SynthCore structs.
 
 make that if you dont input anything under filepath, grab all files from /input
 
-- [ ] (SynthCore) move channel specific configuration into a ChannelData struct for less nesting and simpler code, and a unified setter.
+- [] (SynthCore) move channel specific configuration into a ChannelData struct for less nesting and simpler code, and a unified setter.
 
 - [ ] (SynthCore) Move into VID (Voice ID) for voice management
 
@@ -25,14 +25,14 @@ rightmost one.
 
 Now addVoice will remove voices via RemoveVoice[VID]
 
-- [ ] Create a helper for removing voices in specific channels, called RemoveVoiceFromCh[]
+- [x] Create a helper for removing voices in specific channels, called RemoveVoiceFromCh[]
 wich will search for the matching voice and channel inside SortedVID from rigth to left, and delete it, then return in order to only delete one.
 
-- [ ] implement voice stealing.
+- [x] implement voice stealing.
 when the voices are full, delete the oldest VID at SortedVID(first element), and store the voice there.
 
 
-- [ ] (SynthCore) New sample end/loop handling, I will do the following:
+- [x] (SynthCore) New sample end/loop handling, I will do the following:
 
 IMPLEMENT ALL OF THIS INSIDE REMOVEVOICE()
 
@@ -72,7 +72,7 @@ SamplePacks/YourSamplePack/Percussion
 
 ## Core Systems ##
 
-- [ ] SynthCore Helpers:
+- [x] SynthCore Helpers:
 For handling multiple channels, sample swaps and loading.
 
 Channel_Instumets[16]
@@ -121,9 +121,9 @@ this file will be generated with a python script.
 - [ ] ## SynthCore ##
 Synth Core is the pure math engine that handles the processing of voices and instruments, nothing is hardware specific.
 
- - [ ] VoiceHandling
-  - [ ] Voice Stealing
-  - [ ] Voice ID
+ - [x] VoiceHandling
+  - [x] Voice Stealing
+  - [x] Voice ID
 
  - [x] Helper functions
   - [x] AddVoice()
@@ -132,7 +132,7 @@ Synth Core is the pure math engine that handles the processing of voices and ins
   - [x] UpdateAudioBuffer[]
   - [x] SetChannelPitchBend()
 
-- [ ] Struct System for managing samples and configuration, will behave as following:
+- [x] Struct System for managing samples and configuration, will behave as following:
 
 
 Struct SampleData{ *sample; *sample len: bool looping; loopA; LoopB;}
