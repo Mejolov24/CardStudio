@@ -33,8 +33,8 @@ This firmware is built around a small ecosystem of music related software/librar
 * [SynthCore ](https://github.com/Mejolov24/SynthCore)
 Freestanding lightweight C++ library for multi voice pcm playback
 
-* SynthTrace
-tool for visualizing SynthCore serial channel output.
+* SynthTracer
+tool for visualizing serial channel output.
 * [PCM-MCU-C](https://github.com/Mejolov24/PCM-MCU-C)  Sample converter tool for micro controllers.
 
 ## Internal workflow
