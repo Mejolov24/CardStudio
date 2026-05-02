@@ -22,10 +22,10 @@ struct MidiMessage {
     uint8_t data1;
     uint8_t data2;
 
-    // Helper to get 14-bit pitch bend immediately
+    // Helper to get 14-bit pitch bend,shift to the left and fill gap, getting 14-bits
     int16_t getPitchBend() const {
         if (type == MidiType::PitchBend) {
-            return (int16_t)((data2 << 7) | data1) - 8192;
+            return (int16_t)((data2 << 7) | data1) - 8192; // center for signed data.
         }
         return 0;
     }
@@ -40,26 +40,27 @@ public:
     void setCallback(MidiCallback cb) { _callback = cb; }
 
     void process(uint8_t byte) {
-        if (byte >= 0xF8) return; // Ignore Real-time for now
-
-        if (byte >= 0x80) {
+        if (byte >= 0xF8) return; // Ignore Real-time commands
+        
+        if (byte >= 0x80) { // Checks if its a regular channel message or data depending on the first bit
             _runningStatus = byte;
-            _state = (byte < 0xF0) ? WAIT_DATA1 : WAIT_STATUS;
+            if(byte < 0xF0){ _state = WAIT_DATA1;} else{_state = WAIT_STATUS;}
             return;
+            
         }
 
         if (_state == WAIT_DATA1) {
             _data1 = byte;
             uint8_t mainType = _runningStatus & 0xF0;
-            if (mainType == 0xC0 || mainType == 0xD0) {
-                dispatch(_runningStatus, _data1, 0);
+            if (mainType == 0xC0 || mainType == 0xD0) { // check for program change or channel pressure
+                dispatch(_runningStatus, _data1, 0); // send the 2 byte status change
             } else {
-                _state = WAIT_DATA2;
+                _state = WAIT_DATA2; // wait for the missing data
             }
         } 
         else if (_state == WAIT_DATA2) {
-            dispatch(_runningStatus, _data1, byte);
-            _state = WAIT_DATA1; 
+            dispatch(_runningStatus, _data1, byte); // send the 3 byte status change
+            _state = WAIT_DATA1; // wait for more data, since some midi host save bandwith when commands dont change
         }
     }
 
@@ -68,12 +69,13 @@ private:
     uint8_t _runningStatus;
     uint8_t _data1;
     enum State { WAIT_STATUS, WAIT_DATA1, WAIT_DATA2 } _state;
+    // State machine to keep track of current data, and what to do with it.
 
-    void dispatch(uint8_t status, uint8_t d1, uint8_t d2) {
+    void dispatch(uint8_t status, uint8_t d1, uint8_t d2) { // humanize the raw bytes.
         if (_callback) {
             _callback({
-                static_cast<MidiType>(status & 0xF0),
-                static_cast<uint8_t>((status & 0x0F) + 1),
+                static_cast<MidiType>(status & 0xF0), // ignore channel, send command
+                static_cast<uint8_t>(status & 0x0F),  // ignore command, send channel
                 d1,
                 d2
             });
