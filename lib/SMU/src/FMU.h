@@ -1,4 +1,5 @@
 #include "esp_partition.h"
+#include "ISampleData.h"
 #include <stdint.h>
 #include <SD.h>
 
@@ -18,14 +19,6 @@ public:
         MmapFailed,
         InvalidBankCount
 };
-
-    struct SampleData {
-        const char* name;
-        const int16_t* data;
-        uint32_t length;
-        uint32_t loop_start;
-        uint32_t loop_end;
-    };
 
     static Result burnSamplePack(const char* path);
     static Result mount();

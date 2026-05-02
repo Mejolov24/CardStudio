@@ -8,8 +8,8 @@ uint32_t FMU::g_bit_depth   = 16;
 uint32_t FMU::g_num_dirs    = 0;
 uintptr_t FMU::flash_base   = 0;
 spi_flash_mmap_handle_t FMU::mmap_handle;
-FMU::SampleData FMU::instruments[128];
-FMU::SampleData FMU::percussion[128];
+SampleData FMU::instruments[128];
+SampleData FMU::percussion[128];
 
 FMU::Result FMU::burnSamplePack(const char* path) {
     File file = SD.open(path);
