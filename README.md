@@ -1,4 +1,5 @@
 # CardStudio 
+⚠️ Early development / not stable yet
 A Multi app Firmware designed to turn the CardPuter ADV into a Mini Music Studio
 
 ## Hardware Limitations
@@ -33,7 +34,7 @@ This firmware is built around a small ecosystem of music related software/librar
 * [SynthCore ](https://github.com/Mejolov24/SynthCore)
 Freestanding lightweight C++ library for multi voice pcm playback
 
-* SynthTracer
+* [SynthTracer](https://github.com/Mejolov24/SynthTracer)
 tool for visualizing serial channel output.
 * [PCM-MCU-C](https://github.com/Mejolov24/PCM-MCU-C)  Sample converter tool for micro controllers.
 
@@ -43,7 +44,7 @@ The app is split onto 4 Core libraries:
 powered by [SynthCore](https://github.com/Mejolov24/SynthCore),  The one in charge for the audio processing, handling real-time high quality DSP
 
 * Storage 
-FMU Flash Management Unit)
+FMU (Flash Management Unit)
 Controls the flash mmap, sample burning and loading.
 * CADVCB (CardPuter ADV Keyboard Callback)
 Provides a callback for when a key is pressed, allows easy control.

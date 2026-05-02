@@ -48,26 +48,25 @@ void setChannelInstrument(uint8_t channel, u8_t instrument, bool is_percussion){
 }
 
 void ProcessMidi(MidiMessage msg) {
-    uint8_t channel = msg.channel - 1;
-    SynthCore::ChannelParameters params = synth.getChannelParameters(channel);
-    bool is_percussion (channel == 9);
+    SynthCore::ChannelParameters params = synth.getChannelParameters(msg.channel);
+    bool is_percussion (msg.channel == 9);
     switch (msg.type) {
         
         case MidiType::NoteOn:
             if (msg.data2 > 0) {
                 if (!is_percussion){
-                    synth.createVoice(instruments + channel_instruments[channel],msg.data1,msg.data2,channel);
+                    synth.createVoice(instruments + channel_instruments[msg.channel],msg.data1,msg.data2,msg.channel);
                 }
-                else {synth.createVoice(percussion + getSIDorFallback(msg.data1,true),msg.data1,msg.data2,channel);}
+                else {synth.createVoice(percussion + getSIDorFallback(msg.data1,true),msg.data1,msg.data2,msg.channel);}
             } else {
-                synth.releaseVoiceByNote(msg.data1,channel);
+                synth.releaseVoiceByNote(msg.data1,msg.channel);
             }
             break;
         case MidiType::NoteOff:
-                    synth.releaseVoiceByNote(msg.data1, channel);
+                    synth.releaseVoiceByNote(msg.data1, msg.channel);
                     break;
         case MidiType::ProgramChange:
-                    setChannelInstrument(channel, getSIDorFallback(msg.data1,is_percussion), is_percussion);
+                    setChannelInstrument(msg.channel, getSIDorFallback(msg.data1,is_percussion), is_percussion);
                     break;
 
         case MidiType::ControlChange:
@@ -89,7 +88,7 @@ void ProcessMidi(MidiMessage msg) {
         default:
             break;
     }
-    synth.setChannelParameters(channel,params);
+    synth.setChannelParameters(msg.channel,params);
 }
 
 void setup_samples(){
