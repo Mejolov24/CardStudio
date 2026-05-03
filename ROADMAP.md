@@ -106,7 +106,7 @@ so we use this function to do what we can.
 This is the function Workflow:
 First, we check if the requested sample exists, if it does we return the same sample.
 
-If it doesnt we search for all nearest sample in the current category, if there is one, we return its SID. (Fallback 1)
+If it doesn't we search for all nearest sample in the current category, if there is one, we return its SID. (Fallback 1)
 
 If there isnt a neighbor, we return the SID 255 wich is EmbeddedSineWave (Fallback 2)
 
