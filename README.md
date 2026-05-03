@@ -51,3 +51,6 @@ Provides a callback for when a key is pressed, allows easy control.
 * MidiParser
 Parses Midi and sends a callback with human readable data.
 
+
+
+Copyright (c) 2026 Guillermo Beckers Rival Licensed under the GNU GPLv3
