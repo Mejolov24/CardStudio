@@ -96,7 +96,7 @@ void setup_samples(){
     instruments = fmu.getInstruments();
     percussion = fmu.getPercussion();
     sample_rate = fmu.getSampleRate();
-    synth.createVoice(instruments,69,127,0);
+
 }
 
 void OnKey(uint8_t key, bool pressed){
@@ -128,7 +128,7 @@ void setup() {
     }
 
     Serial.println("SD OK.");
-    synth.setBaseNote(72);
+    //synth.setBaseNote(72);
     setup_samples();
     mp.setCallback(ProcessMidi);
 }
