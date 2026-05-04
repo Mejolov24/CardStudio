@@ -1,3 +1,5 @@
+// WARNING: THIS CODE IS FOR TESTING AND DOES NOT REFLECT THE FINAL MAIN.CPP //
+
 #include <M5Cardputer.h>
 #include <SPI.h>
 #include <SD.h>
