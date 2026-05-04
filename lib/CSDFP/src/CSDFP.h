@@ -23,8 +23,7 @@ class CSDFP{
     void render();
 
     public:
-    void begin(M5Canvas* targetCanvas);
-    void setSelectionCallback(SelectionCallback callback);
+    void begin(M5Canvas* targetCanvas, SelectionCallback callback);
     void open(const char* path); // opens the file picker
     void close(); // closes the file picker
     void process_input(Input input);

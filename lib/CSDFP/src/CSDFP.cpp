@@ -1,8 +1,12 @@
 #include "CSDFP.h"
+M5Canvas canvas(&M5.Lcd);
 
+void CSDFP::render(){
 
-void CSDFP::setSelectionCallback(SelectionCallback callback){
+    return;
+}
 
+void CSDFP::begin(){
     return;
 }
 
