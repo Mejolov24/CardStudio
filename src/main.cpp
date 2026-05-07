@@ -1,29 +1,53 @@
 // WARNING: THIS CODE IS FOR TESTING AND DOES NOT REFLECT THE FINAL MAIN.CPP //
 
-#include <M5Cardputer.h>
+
 #include <SPI.h>
 #include <SD.h>
 #include <FMU.h>
-FMU fmu;
-#include <SynthCore.h>
-SynthCore synth;
-#include <M5CADVKeyCB.h>
-M5CADVKeyCB keyHandler;
-
 #include <MP.h>
+#include <SynthCore.h>
+#include "M5Cardputer.h"
+#include <M5SDE.h>
+#include <M5CADVKeyCB.h>
+M5Canvas canvas(&M5.Lcd);
+FMU fmu;
+M5CADVKeyCB keyHandler;
+SynthCore synth;
 MidiParser mp;
-
+M5SDE sdex;
+using input = M5SDE::Input;
 // --- SD PINS ---
 #define SD_SPI_SCK_PIN  40
 #define SD_SPI_MISO_PIN 39
 #define SD_SPI_MOSI_PIN 14
 #define SD_SPI_CS_PIN   12
 
+#define WIDTH 240
+#define HEIGHT 135
+#define ITEM_HEIGHT 26
+#define BG_COLOR 0x0008
+#define COLOR 0xffff
+#define COLOR_1 0xfdc0
+#define COLOR_2 0xffe0
+#define TEXT_FONT &fonts::Font4 // 26 px in height
+
+
 uint32_t sample_rate;
 const SampleData* instruments = nullptr;
 const SampleData* percussion = nullptr;
 
 uint8_t channel_instruments[16]; // contains the SID of the channel.
+bool at_settings = false;
+bool at_sd = false;
+uint16_t width = 0;
+uint16_t height = 0;
+uint8_t base_note = 69;
+
+uint8_t cursor_index = 0;
+struct {
+    int8_t transpose = 0;
+    uint8_t volume = 255;
+} settings;
 
 
 uint8_t getSIDorFallback(uint8_t SID,bool is_percussion){
@@ -101,18 +125,116 @@ void setup_samples(){
 
 }
 
-void OnKey(uint8_t key, bool pressed){
-  Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-if (status.opt){
-  fmu.burnSamplePack("/AppData/CardStudio/SamplePacks/output.spack");
-  setup_samples();
-}
+void update_ui(){
+    if(at_sd) return;
+  canvas.clearDisplay();
+  if(!at_settings){
+    canvas.pushSprite(0,0);
+    return;
+  }
+  canvas.setTextColor(COLOR);
+  canvas.drawString("Transpose  :",0,0,TEXT_FONT);
+  canvas.drawString(String(settings.transpose), 160, 0, TEXT_FONT);
+  canvas.drawString("Volume :",0, 26, TEXT_FONT);
+  canvas.drawString(String(settings.volume), 160, 26, TEXT_FONT);
+  
+  canvas.setTextColor(COLOR_1);
+  canvas.drawRect(40,90,145,36,COLOR_1);
+  canvas.drawString("Burn spack", 50, 100, TEXT_FONT);
+
+    switch (cursor_index)
+    {
+        case 0:
+        canvas.drawRect(160,0,42,26,COLOR);
+        break;
+
+        case 1:
+        canvas.drawRect(160,26,42,26,COLOR);
+        break;
+
+        case 2:
+
+        canvas.drawRect(40,90,145,36,COLOR_2);
+
+        default:
+        break;
+    }
+  canvas.pushSprite(0,0);
 }
 
+void OnKey(uint8_t key, bool pressed){
+  Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+if(status.del){
+    sdex.process_input(input::back);
+}
+if (status.opt){
+    at_settings = !at_settings;
+    if (at_sd){
+        sdex.close();
+        at_sd = false;
+    }
+}
+if (status.enter){
+    if (at_sd){sdex.process_input(input::select);}
+    else if(cursor_index == 2 and !at_sd){
+            M5SDE::ExplorerSettings settings;
+            settings.background_color = 0x211a;
+            settings.border_color = 0x2c9f;
+            settings.selection_color = 0x06e0;
+            settings.item_height = 23;
+            settings.item_window = 4;
+            settings.font = &fonts::FreeSans12pt7b;
+
+            sdex.goToAbsoluteDir("AppData/CardStudio/SamplePacks");
+            sdex.open(&settings);
+            at_sd = true;
+        }
+    }
+if(!pressed) return;
+switch (key)
+{
+case 51:
+    if(cursor_index != 0){cursor_index --;}
+    sdex.process_input(input::up);
+    break;
+case 55:
+    cursor_index ++;
+    sdex.process_input(input::down);
+    break;
+
+  case 56:
+  if (cursor_index == 0){settings.transpose ++;}
+  else if(cursor_index == 1){settings.volume ++;}
+  break;
+
+  case 54:
+  if (cursor_index == 0){settings.transpose --;}
+  else if(cursor_index == 1){settings.volume --;}
+  break;
+
+default:
+    break;
+}
+if (cursor_index > 2){cursor_index = 0;}
+synth.setBaseNote(base_note + settings.transpose);
+M5.Speaker.setVolume(settings.volume);
+update_ui();
+}
+
+void OnSelection(const char* path){// returns the absolute path of selected item
+    sdex.close();
+    at_sd = false;
+    canvas.setTextColor(COLOR_1);
+    canvas.drawString("Burning...",0,HEIGHT/2,TEXT_FONT);
+    canvas.pushSprite(0,0);
+    fmu.burnSamplePack(path);
+    setup_samples();
+}
 
 void setup() {
     auto cfg = M5.config();
     M5Cardputer.begin(cfg);
+    canvas.createSprite(240, 135);
     keyHandler.SetupKeyboardCallback(OnKey);
 
     Serial.begin(38400);
@@ -133,6 +255,7 @@ void setup() {
     //synth.setBaseNote(72);
     setup_samples();
     mp.setCallback(ProcessMidi);
+    sdex.begin(&canvas,OnSelection);
 }
 
 void loop() {
