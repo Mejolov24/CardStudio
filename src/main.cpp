@@ -1,6 +1,5 @@
 // WARNING: THIS CODE IS FOR TESTING AND DOES NOT REFLECT THE FINAL MAIN.CPP //
 
-
 #include <SPI.h>
 #include <SD.h>
 #include <FMU.h>
@@ -31,7 +30,6 @@ using input = M5SDE::Input;
 #define COLOR_2 0xffe0
 #define TEXT_FONT &fonts::Font4 // 26 px in height
 
-
 uint32_t sample_rate;
 const SampleData* instruments = nullptr;
 const SampleData* percussion = nullptr;
@@ -39,16 +37,10 @@ const SampleData* percussion = nullptr;
 uint8_t channel_instruments[16]; // contains the SID of the channel.
 bool at_settings = false;
 bool at_sd = false;
-uint16_t width = 0;
-uint16_t height = 0;
+
 uint8_t base_note = 69;
-
-uint8_t cursor_index = 0;
-struct {
-    int8_t transpose = 0;
-    uint8_t volume = 255;
-} settings;
-
+int8_t transpose = 0;
+uint8_t volume = 0;
 
 uint8_t getSIDorFallback(uint8_t SID,bool is_percussion){
     const SampleData* current_array = instruments;
@@ -125,43 +117,6 @@ void setup_samples(){
 
 }
 
-void update_ui(){
-    if(at_sd) return;
-  canvas.clearDisplay();
-  if(!at_settings){
-    canvas.pushSprite(0,0);
-    return;
-  }
-  canvas.setTextColor(COLOR);
-  canvas.drawString("Transpose  :",0,0,TEXT_FONT);
-  canvas.drawString(String(settings.transpose), 160, 0, TEXT_FONT);
-  canvas.drawString("Volume :",0, 26, TEXT_FONT);
-  canvas.drawString(String(settings.volume), 160, 26, TEXT_FONT);
-  
-  canvas.setTextColor(COLOR_1);
-  canvas.drawRect(40,90,145,36,COLOR_1);
-  canvas.drawString("Burn spack", 50, 100, TEXT_FONT);
-
-    switch (cursor_index)
-    {
-        case 0:
-        canvas.drawRect(160,0,42,26,COLOR);
-        break;
-
-        case 1:
-        canvas.drawRect(160,26,42,26,COLOR);
-        break;
-
-        case 2:
-
-        canvas.drawRect(40,90,145,36,COLOR_2);
-
-        default:
-        break;
-    }
-  canvas.pushSprite(0,0);
-}
-
 void OnKey(uint8_t key, bool pressed){
   Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
 if(status.del){
@@ -174,51 +129,36 @@ if (status.opt){
         at_sd = false;
     }
 }
-if (status.enter){
-    if (at_sd){sdex.process_input(input::select);}
-    else if(cursor_index == 2 and !at_sd){
-            M5SDE::ExplorerSettings settings;
-            settings.background_color = 0x211a;
-            settings.border_color = 0x2c9f;
-            settings.selection_color = 0x06e0;
-            settings.item_height = 23;
-            settings.item_window = 4;
-            settings.font = &fonts::FreeSans12pt7b;
-
-            sdex.goToAbsoluteDir("AppData/CardStudio/SamplePacks");
-            sdex.open(&settings);
-            at_sd = true;
+    if (status.enter){
+            
         }
-    }
-if(!pressed) return;
-switch (key)
-{
-case 51:
-    if(cursor_index != 0){cursor_index --;}
-    sdex.process_input(input::up);
-    break;
-case 55:
-    cursor_index ++;
-    sdex.process_input(input::down);
+        if(!pressed) return;
+        switch (key)
+    {
+    case 51:
+        if(cursor_index != 0){cursor_index --;}
+        sdex.process_input(input::up);
+        break;
+    case 55:
+        cursor_index ++;
+        sdex.process_input(input::down);
+        break;
+
+    case 56:
+    if (cursor_index == 0){transpose ++;}
+    else if(cursor_index == 1){volume += 10;}
     break;
 
-  case 56:
-  if (cursor_index == 0){settings.transpose ++;}
-  else if(cursor_index == 1){settings.volume ++;}
-  break;
-
-  case 54:
-  if (cursor_index == 0){settings.transpose --;}
-  else if(cursor_index == 1){settings.volume --;}
-  break;
-
-default:
+    case 54:
+    if (cursor_index == 0){transpose --;}
+    else if(cursor_index == 1){volume -= 10;}
     break;
+
+    default:
+        break;
 }
-if (cursor_index > 2){cursor_index = 0;}
-synth.setBaseNote(base_note + settings.transpose);
-M5.Speaker.setVolume(settings.volume);
-update_ui();
+    synth.setBaseNote(base_note - transpose);
+    M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
 }
 
 void OnSelection(const char* path){// returns the absolute path of selected item
@@ -231,16 +171,23 @@ void OnSelection(const char* path){// returns the absolute path of selected item
     setup_samples();
 }
 
+hw_timer_t *timer = NULL;
+volatile bool sendFlag = false;
+void IRAM_ATTR sendSample() {
+  sendFlag = true;
+}
+
 void setup() {
     auto cfg = M5.config();
     M5Cardputer.begin(cfg);
     canvas.createSprite(240, 135);
     keyHandler.SetupKeyboardCallback(OnKey);
 
-    Serial.begin(38400);
-    delay(2000);
-
-    Serial.println("--- CARDSTUDIO START ---");
+    Serial.begin();
+    timer = timerBegin(0, 80, true); 
+    timerAttachInterrupt(timer, &sendSample, true);
+    timerAlarmWrite(timer, 8000, true);
+    timerAlarmEnable(timer);
 
     M5.Speaker.setVolume(128);
 
@@ -252,7 +199,6 @@ void setup() {
     }
 
     Serial.println("SD OK.");
-    //synth.setBaseNote(72);
     setup_samples();
     mp.setCallback(ProcessMidi);
     sdex.begin(&canvas,OnSelection);
@@ -269,4 +215,16 @@ void loop() {
             uint8_t incomingByte = Serial.read();
             mp.process(incomingByte);
         }
+if (sendFlag) {
+    sendFlag = false;
+    for(int i = 0; i < 16; i++) {
+        // Get the 16-bit signed value
+        int16_t val = synth.channel_output[i]; 
+
+        Serial.write(255);          // Header
+        Serial.write(i);            // Channel ID
+        Serial.write(val >> 8);     // High Byte (MSB)
+        Serial.write(val & 0xFF);   // Low Byte (LSB)
+    }
+}
 }
