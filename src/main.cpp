@@ -2,19 +2,24 @@
 
 #include <SPI.h>
 #include <SD.h>
+#include <M5Cardputer.h>
+
 #include <FMU.h>
 #include <MP.h>
 #include <SynthCore.h>
-#include "M5Cardputer.h"
 #include <M5SDE.h>
 #include <M5CADVKeyCB.h>
+#include <M5Config.h>
 M5Canvas canvas(&M5.Lcd);
-FMU fmu;
 M5CADVKeyCB keyHandler;
+M5SDE sdex;
+M5Config config;
+FMU fmu;
 SynthCore synth;
 MidiParser mp;
-M5SDE sdex;
-using input = M5SDE::Input;
+
+#include "config_definitions.h"
+
 // --- SD PINS ---
 #define SD_SPI_SCK_PIN  40
 #define SD_SPI_MISO_PIN 39
@@ -40,7 +45,8 @@ bool at_sd = false;
 
 uint8_t base_note = 69;
 int8_t transpose = 0;
-uint8_t volume = 0;
+uint8_t volume = 50;
+
 
 uint8_t getSIDorFallback(uint8_t SID,bool is_percussion){
     const SampleData* current_array = instruments;
@@ -117,48 +123,52 @@ void setup_samples(){
 
 }
 
-void OnKey(uint8_t key, bool pressed){
-  Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-if(status.del){
-    sdex.process_input(input::back);
+void sd(bool open){
+    if(open)sdex.open(); else sdex.close();
+    at_sd = open;
 }
-if (status.opt){
-    at_settings = !at_settings;
-    if (at_sd){
-        sdex.close();
-        at_sd = false;
-    }
-}
-    if (status.enter){
-            
-        }
-        if(!pressed) return;
-        switch (key)
-    {
-    case 51:
-        if(cursor_index != 0){cursor_index --;}
-        sdex.process_input(input::up);
-        break;
-    case 55:
-        cursor_index ++;
-        sdex.process_input(input::down);
-        break;
 
-    case 56:
-    if (cursor_index == 0){transpose ++;}
-    else if(cursor_index == 1){volume += 10;}
-    break;
-
-    case 54:
-    if (cursor_index == 0){transpose --;}
-    else if(cursor_index == 1){volume -= 10;}
-    break;
-
-    default:
-        break;
-}
+void OnUsage(M5Config::ConfigItem* item){
     synth.setBaseNote(base_note - transpose);
     M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
+}
+
+void OnKey(uint8_t key, bool pressed){
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    if(status.del){
+        sdex.process_input(M5SDE::Input::back);
+        config.process_input(M5Config::Input::BACK);
+    }
+    if (status.opt){
+        if(!at_settings){config.open();} else {config.close(); canvas.pushSprite(0,0);}
+        at_settings = !at_settings;
+    }
+    if (status.enter){
+        config.process_input(M5Config::Input::SELECT);
+        }
+    if(!pressed) return;
+    switch (key)
+        {
+        case 51:
+            sdex.process_input(M5SDE::Input::up);
+            config.process_input(M5Config::Input::UP);
+            break;
+        case 55:
+            sdex.process_input(M5SDE::Input::down);
+            config.process_input(M5Config::Input::DOWN);
+            break;
+
+        case 54: // left
+        config.process_input(M5Config::Input::LEFT);
+        break;
+
+        case 56:// right
+        config.process_input(M5Config::Input::RIGHT);
+        break;
+
+        default:
+            break;
+}
 }
 
 void OnSelection(const char* path){// returns the absolute path of selected item
@@ -180,8 +190,8 @@ void IRAM_ATTR sendSample() {
 void setup() {
     auto cfg = M5.config();
     M5Cardputer.begin(cfg);
-    canvas.createSprite(240, 135);
-    keyHandler.SetupKeyboardCallback(OnKey);
+    canvas.createSprite(M5.Lcd.width(), M5.Lcd.height());
+    M5.Speaker.setVolume(volume);
 
     Serial.begin();
     timer = timerBegin(0, 80, true); 
@@ -189,19 +199,19 @@ void setup() {
     timerAlarmWrite(timer, 8000, true);
     timerAlarmEnable(timer);
 
-    M5.Speaker.setVolume(128);
-
     SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
 
     if (!SD.begin(SD_SPI_CS_PIN, SPI, 25000000)) {
         Serial.println("SD failed!");
         return;
     }
-
     Serial.println("SD OK.");
-    setup_samples();
+    keyHandler.SetupKeyboardCallback(OnKey);
     mp.setCallback(ProcessMidi);
+    config.begin(&canvas,OnUsage);
+    config.goToMenu(&settings_menu);
     sdex.begin(&canvas,OnSelection);
+    setup_samples();
 }
 
 void loop() {
@@ -215,7 +225,7 @@ void loop() {
             uint8_t incomingByte = Serial.read();
             mp.process(incomingByte);
         }
-if (sendFlag) {
+if (false) {
     sendFlag = false;
     for(int i = 0; i < 16; i++) {
         // Get the 16-bit signed value
