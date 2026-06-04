@@ -46,6 +46,49 @@ bool at_sd = false;
 uint8_t base_note = 69;
 int8_t transpose = 0;
 uint8_t volume = 50;
+uint16_t serial_tx_speed = 8000;
+bool serial_plot = false;
+
+hw_timer_t *timer = NULL;
+
+void open_sd(){
+    config.close();
+    sdex.goToAbsoluteDir("/AppData/CardStudio/samplepacks");
+    sdex.open();
+    at_sd = true;
+}
+
+
+M5Config::ConfigItem configs[] = {
+    {
+        "Volume", // name
+        &volume, // pointer to variable
+        10, // increment
+        0, // minimum
+        100,// maximum
+        M5Config::ScrollType::TYPE_CLAMP
+    },
+    {
+        "Serial plot",
+        &serial_plot
+    },
+    {
+        "Serial TX rate",
+        &serial_tx_speed,
+        1000,
+        1000,
+        44000
+    },
+    {
+        "Burn spack",
+        open_sd
+    }
+};
+
+M5Config::ConfigMenu settings_menu = {
+    .config_items = configs, 
+    .size = sizeof(configs) / sizeof(configs[0])
+};
 
 
 uint8_t getSIDorFallback(uint8_t SID,bool is_percussion){
@@ -123,14 +166,17 @@ void setup_samples(){
 
 }
 
-void sd(bool open){
-    if(open)sdex.open(); else sdex.close();
-    at_sd = open;
-}
 
 void OnUsage(M5Config::ConfigItem* item){
     synth.setBaseNote(base_note - transpose);
     M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
+    if(serial_plot){
+    timerAlarmWrite(timer, serial_tx_speed, true);
+    timerAlarmEnable(timer);
+    }
+    else{
+        if (timer) timerAlarmDisable(timer);
+    }
 }
 
 void OnKey(uint8_t key, bool pressed){
@@ -140,10 +186,11 @@ void OnKey(uint8_t key, bool pressed){
         config.process_input(M5Config::Input::BACK);
     }
     if (status.opt){
-        if(!at_settings){config.open();} else {config.close(); canvas.pushSprite(0,0);}
+        if(!at_settings){config.open(); sdex.close();} else {config.close(); canvas.pushSprite(0,0);}
         at_settings = !at_settings;
     }
     if (status.enter){
+        sdex.process_input(M5SDE::Input::select);
         config.process_input(M5Config::Input::SELECT);
         }
     if(!pressed) return;
@@ -174,14 +221,16 @@ void OnKey(uint8_t key, bool pressed){
 void OnSelection(const char* path){// returns the absolute path of selected item
     sdex.close();
     at_sd = false;
+    at_settings = false;
     canvas.setTextColor(COLOR_1);
     canvas.drawString("Burning...",0,HEIGHT/2,TEXT_FONT);
     canvas.pushSprite(0,0);
     fmu.burnSamplePack(path);
+    canvas.clear();
+    canvas.pushSprite(0,0);
     setup_samples();
 }
 
-hw_timer_t *timer = NULL;
 volatile bool sendFlag = false;
 void IRAM_ATTR sendSample() {
   sendFlag = true;
@@ -196,8 +245,6 @@ void setup() {
     Serial.begin();
     timer = timerBegin(0, 80, true); 
     timerAttachInterrupt(timer, &sendSample, true);
-    timerAlarmWrite(timer, 8000, true);
-    timerAlarmEnable(timer);
 
     SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
 
@@ -225,7 +272,7 @@ void loop() {
             uint8_t incomingByte = Serial.read();
             mp.process(incomingByte);
         }
-if (false) {
+if (sendFlag) {
     sendFlag = false;
     for(int i = 0; i < 16; i++) {
         // Get the 16-bit signed value
