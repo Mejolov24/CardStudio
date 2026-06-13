@@ -1,5 +1,6 @@
 # CardStudio 
 ⚠️ Early development / not stable yet
+Kinda outdated readme.md since codebase is actively chaning and has no stable documentation
 A Multi app Firmware designed to turn the CardPuter ADV into a Mini Music Studio
 
 ## Hardware Limitations
@@ -24,33 +25,30 @@ Since its a modular tool, you need to use it in a specific way:
 * Place the .spack into the CardPuter SD Card at /AppData/CardStudio/SamplePacks 
 
 ## Features:
-- [ ] Serial Midi playback
-- [ ] Serial Oscilloscope View
+- [x] Serial Midi playback
+- [x] Serial Oscilloscope View
 - [ ] USB Midi playback 
 - [ ] SD Midi playback 
 
 ## Ecosystem 
-This firmware is built around a small ecosystem of music related software/libraries:
+This firmware is built around a small ecosystem of music related software/libraries that i made:
 * [SynthCore ](https://github.com/Mejolov24/SynthCore)
-Freestanding lightweight C++ library for multi voice pcm playback
-
+Freestanding lightweight library for multi voice pcm playback
 * [SynthTracer](https://github.com/Mejolov24/SynthTracer)
-tool for visualizing serial channel output.
-* [PCM-MCU-C](https://github.com/Mejolov24/PCM-MCU-C)  Sample converter tool for micro controllers.
-
-## Internal workflow
-The app is split onto 4 Core libraries:
-* Audio engine
-powered by [SynthCore](https://github.com/Mejolov24/SynthCore),  The one in charge for the audio processing, handling real-time high quality DSP
-
+tool for visualizing serial channel output and sending midi packets.
+* [PCM-MCU-C](https://github.com/Mejolov24/PCM-MCU-C)
+Sample converter tool for micro controllers.
+* [MidiParser](https://github.com/Mejolov24/MidiParser)
+Parses Midi and sends a callback with human readable data.
+* [M5Config](https://github.com/Mejolov24/M5Config)
+UI interface for adjusting variables on M5Stack devices
+* [M5SDE](https://github.com/Mejolov24/M5SDE)
+UI SD Card Explorer for M5Stack devices
+## Internal libraries
 * Storage 
 FMU (Flash Management Unit)
 Controls the flash mmap, sample burning and loading.
 * CADVCB (CardPuter ADV Keyboard Callback)
 Provides a callback for when a key is pressed, allows easy control.
-* MidiParser
-Parses Midi and sends a callback with human readable data.
-
-
 
 Copyright (c) 2026 Guillermo Beckers Rival Licensed under the GNU GPLv3
