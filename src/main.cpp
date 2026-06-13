@@ -43,13 +43,38 @@ uint8_t channel_instruments[16]; // contains the SID of the channel.
 bool at_settings = false;
 bool at_sd = false;
 
-uint8_t base_note = 69;
-int8_t transpose = 0;
 uint8_t volume = 50;
+uint8_t base_note = 69;
+
 uint16_t serial_tx_speed = 8000;
 bool serial_plot = false;
 
+// channel overrides
+uint8_t channel_override_index;
+uint8_t virtual_volume_override_value = false;
+bool virtual_sustain_override = false;
+bool virtual_sustain_override_value = false;
+bool virtual_volume_override = false;
+//
+
+struct VirtualChannelOverride{
+    bool sustain_override = false;
+    bool sustain_override_value = false;
+    bool volume_override_value = false;
+    uint8_t volume_override = false;
+};
+
 hw_timer_t *timer = NULL;
+
+// since double buffering is needed, i implemented channel tx buffers because buffer generation is "instant"
+// and serial plotting is not.
+#define BUFFER_SIZE 256
+int16_t _BufferA[BUFFER_SIZE];
+int16_t _BufferB[BUFFER_SIZE];
+bool _buffer_index = 0;
+
+int16_t channel_TX_buffers[16][BUFFER_SIZE];
+uint32_t tx_buffer_index = 0;
 
 void open_sd(){
     config.close();
@@ -58,8 +83,28 @@ void open_sd(){
     at_sd = true;
 }
 
+M5SDE::ExplorerTheme sd_theme = {
+    .directory_color = 0xf940,
+    .background_color = BLACK,
+    .border_color = 0xfb40, // orange
+    .selection_color = 0x5940, // dim orange
+    .text_color = 0xfb40,
+    .item_height = 23,
+    .item_window = 4,
+    .font = &fonts::FreeSans12pt7b
+};
+M5Config::ExplorerTheme config_theme = {
+    .background_color = 0x211a, // blue
+    .border_color = 0x2c9f,
+    .selection_color = 0x06e0,
+    .item_height = 23,
+    .item_window = 4,
+    .font = &fonts::FreeSans12pt7b
+};
 
-M5Config::ConfigItem configs[] = {
+
+
+M5Config::ConfigItem AudioSettings[] = {
     {
         "Volume", // name
         &volume, // pointer to variable
@@ -68,6 +113,45 @@ M5Config::ConfigItem configs[] = {
         100,// maximum
         M5Config::ScrollType::TYPE_CLAMP
     },
+    {
+        "Base Note",
+        &base_note,
+        1,
+        0,
+        127
+    }
+};
+
+M5Config::ConfigItem ChannelOverrideSettings[] = {
+    {
+        "Channel id",
+        &channel_override_index,
+        1,
+        0,
+        15
+    },
+    {
+        "Sustain override",
+        &virtual_sustain_override
+    },
+    {
+        "Sustain value",
+        &virtual_sustain_override_value
+    },
+    {
+        "Volume override",
+        &virtual_volume_override
+    },
+    {
+        "Volume value",
+        &virtual_volume_override_value,
+        1,
+        0,
+        127
+    }
+};
+
+M5Config::ConfigItem IOSettings[] = {
     {
         "Serial plot",
         &serial_plot
@@ -78,17 +162,50 @@ M5Config::ConfigItem configs[] = {
         1000,
         1000,
         44000
+    }
+};
+
+M5Config::ConfigMenu AudioMenu = {
+    .id = 0,
+    .config_items = AudioSettings, 
+    .size = sizeof(AudioSettings) / sizeof(AudioSettings[0])
+};
+M5Config::ConfigMenu ChannelOverrideMenu = {
+    .id = 1,
+    .config_items = ChannelOverrideSettings, 
+    .size = sizeof(ChannelOverrideSettings) / sizeof(ChannelOverrideSettings[0])
+};
+M5Config::ConfigMenu IOMenu = {
+    .id = 2,
+    .config_items = IOSettings, 
+    .size = sizeof(IOSettings) / sizeof(IOSettings[0])
+};
+
+
+M5Config::ConfigItem MainSettings[] = {
+    {
+        "Audio",
+        &AudioMenu
     },
     {
-        "Burn spack",
+        "Channel Overrides",
+        &ChannelOverrideMenu
+    },
+    {
+        "I/O",
+        &IOMenu
+    },
+    {
+        "Burn sample pack",
         open_sd
     }
 };
 
-M5Config::ConfigMenu settings_menu = {
-    .config_items = configs, 
-    .size = sizeof(configs) / sizeof(configs[0])
+M5Config::ConfigMenu MainMenu = {
+    .config_items = MainSettings, 
+    .size = sizeof(MainSettings) / sizeof(MainSettings[0])
 };
+
 
 
 uint8_t getSIDorFallback(uint8_t SID,bool is_percussion){
@@ -122,9 +239,9 @@ void ProcessMidi(MidiMessage msg) {
         case MidiType::NoteOn:
             if (msg.data2 > 0) {
                 if (!is_percussion){
-                    synth.createVoice(instruments + channel_instruments[msg.channel],msg.data1,msg.data2,msg.channel);
+                    synth.createVoice(instruments + channel_instruments[msg.channel],msg.data1,msg.data2,msg.channel,false);
                 }
-                else {synth.createVoice(percussion + getSIDorFallback(msg.data1,true),msg.data1,msg.data2,msg.channel);}
+                else {synth.createVoice(percussion + getSIDorFallback(msg.data1,true),msg.data1,msg.data2,msg.channel,true);}
             } else {
                 synth.releaseVoiceByNote(msg.data1,msg.channel);
             }
@@ -167,16 +284,27 @@ void setup_samples(){
 }
 
 
-void OnUsage(M5Config::ConfigItem* item){
-    synth.setBaseNote(base_note - transpose);
-    M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
-    if(serial_plot){
-    timerAlarmWrite(timer, serial_tx_speed, true);
-    timerAlarmEnable(timer);
+void OnUsage(M5Config::ConfigItem* item,M5Config::ConfigMenu* menu){
+    switch (menu->id)
+    {
+    case 0:
+        synth.setBaseNote(base_note);
+        M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
+        break;
+    case 1:
+    
+    case 2:
+        if(serial_plot){
+        timerAlarmWrite(timer, serial_tx_speed, true);
+        timerAlarmEnable(timer);
+        }
+        else{if (timer) timerAlarmDisable(timer);}
+        break;
+    default:
+        break;
     }
-    else{
-        if (timer) timerAlarmDisable(timer);
-    }
+
+
 }
 
 void OnKey(uint8_t key, bool pressed){
@@ -236,6 +364,25 @@ void IRAM_ATTR sendSample() {
   sendFlag = true;
 }
 
+int16_t* getAudioBuffer(){
+  if (!_buffer_index) return _BufferB; 
+  else return _BufferA;
+}
+
+void updateAudioBuffer(){
+  int16_t* _current_buffer;
+  if (!_buffer_index){_current_buffer = _BufferA;}
+  else {_current_buffer = _BufferB;}
+
+  for (int i = 0; i < BUFFER_SIZE; i++){
+    synth.stepAudio();
+    _current_buffer[i] = synth.master_mix;
+    for(uint16_t ch = 0; ch < 16; ch++){channel_TX_buffers[ch][i] = synth.channel_output[ch];}
+  }
+  _buffer_index = !_buffer_index;
+  tx_buffer_index = 0;
+}
+
 void setup() {
     auto cfg = M5.config();
     M5Cardputer.begin(cfg);
@@ -247,17 +394,18 @@ void setup() {
     timerAttachInterrupt(timer, &sendSample, true);
 
     SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+    SD.begin(SD_SPI_CS_PIN, SPI, 25000000);
 
-    if (!SD.begin(SD_SPI_CS_PIN, SPI, 25000000)) {
-        Serial.println("SD failed!");
-        return;
-    }
-    Serial.println("SD OK.");
     keyHandler.SetupKeyboardCallback(OnKey);
     mp.setCallback(ProcessMidi);
+
     config.begin(&canvas,OnUsage);
-    config.goToMenu(&settings_menu);
+    config.goToMenu(&MainMenu);
+    config.setTheme(&config_theme);
+
+    sdex.setTheme(&sd_theme);
     sdex.begin(&canvas,OnSelection);
+
     setup_samples();
 }
 
@@ -266,22 +414,22 @@ void loop() {
     keyHandler.KeyboardUpdate();
 
     if (!M5.Speaker.isPlaying()) {
-        synth.updateAudioBuffer();
-        M5.Speaker.playRaw(synth.getAudioBuffer(), 256, sample_rate);}
+        updateAudioBuffer();
+        M5.Speaker.playRaw(getAudioBuffer(), BUFFER_SIZE, sample_rate);}
     while (Serial.available() > 0) {
             uint8_t incomingByte = Serial.read();
             mp.process(incomingByte);
         }
-if (sendFlag) {
-    sendFlag = false;
-    for(int i = 0; i < 16; i++) {
-        // Get the 16-bit signed value
-        int16_t val = synth.channel_output[i]; 
-
-        Serial.write(255);          // Header
-        Serial.write(i);            // Channel ID
-        Serial.write(val >> 8);     // High Byte (MSB)
-        Serial.write(val & 0xFF);   // Low Byte (LSB)
+        
+    if (sendFlag) {
+        sendFlag = false;
+        for(int i = 0; i < 16; i++) {
+            int16_t val = channel_TX_buffers[i][tx_buffer_index * (sample_rate / serial_tx_speed)]; 
+            Serial.write(255);          // Header
+            Serial.write(i);            // Channel ID
+            Serial.write(val >> 8);     // High Byte (MSB)
+            Serial.write(val & 0xFF);   // Low Byte (LSB)
+        }
+        tx_buffer_index ++;
     }
-}
 }
