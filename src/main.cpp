@@ -39,7 +39,7 @@ uint32_t sample_rate;
 const SampleData* instruments = nullptr;
 const SampleData* percussion = nullptr;
 
-uint8_t channel_instruments[16]; // contains the SID of the channel.
+
 bool at_settings = false;
 bool at_sd = false;
 
@@ -50,20 +50,34 @@ uint16_t serial_tx_speed = 8000;
 bool serial_plot = false;
 
 // channel overrides
-uint8_t channel_override_index;
-uint8_t virtual_volume_override_value = false;
-bool virtual_sustain_override = false;
-bool virtual_sustain_override_value = false;
-bool virtual_volume_override = false;
-//
+uint8_t channel_override_index = 0;
+uint8_t previous_channel_override_index = 0;
 
-struct VirtualChannelOverride{
+uint8_t virtual_instrument_value = 0;
+bool virtual_sustain_value = false;
+int16_t virtual_vibrato_value = 1024;
+int16_t virtual_bend_value = 1024;
+uint8_t virtual_volume_value = 127;
+
+bool virtual_instrument_override = false;
+bool virtual_sustain_override = false;
+bool virtual_vibrato_override = false;
+bool virtual_bend_override = false;
+bool virtual_volume_override = false;
+
+struct ChannelOverride{
+    bool instrument_override = false;
     bool sustain_override = false;
-    bool sustain_override_value = false;
-    bool volume_override_value = false;
-    uint8_t volume_override = false;
+    bool vibrato_override = false;
+    bool bend_override = false;
+    bool volume_override = false;
 };
 
+
+SynthCore::ChannelParameters channels_parameters[16];
+ChannelOverride channels_overrides[16];
+uint8_t channels_sid[16];
+//
 hw_timer_t *timer = NULL;
 
 // since double buffering is needed, i implemented channel tx buffers because buffer generation is "instant"
@@ -90,7 +104,7 @@ M5SDE::ExplorerTheme sd_theme = {
     .selection_color = 0x5940, // dim orange
     .text_color = 0xfb40,
     .item_height = 23,
-    .item_window = 4,
+    .item_window = 6,
     .font = &fonts::FreeSans12pt7b
 };
 M5Config::ExplorerTheme config_theme = {
@@ -98,7 +112,7 @@ M5Config::ExplorerTheme config_theme = {
     .border_color = 0x2c9f,
     .selection_color = 0x06e0,
     .item_height = 23,
-    .item_window = 4,
+    .item_window = 6,
     .font = &fonts::FreeSans12pt7b
 };
 
@@ -124,11 +138,22 @@ M5Config::ConfigItem AudioSettings[] = {
 
 M5Config::ConfigItem ChannelOverrideSettings[] = {
     {
-        "Channel id",
+        "Channel",
         &channel_override_index,
         1,
         0,
         15
+    },
+    {
+        "Instrument override",
+        &virtual_instrument_override
+    },
+    {
+        "Instrument value",
+        &virtual_instrument_value,
+        1,
+        0,
+        127
     },
     {
         "Sustain override",
@@ -136,7 +161,29 @@ M5Config::ConfigItem ChannelOverrideSettings[] = {
     },
     {
         "Sustain value",
-        &virtual_sustain_override_value
+        &virtual_sustain_value
+    },
+    {
+        "Vibrato override",
+        &virtual_vibrato_override
+    },
+    {
+        "Vibrato value",
+        &virtual_vibrato_value,
+        4,
+        INT16_MAX,
+        INT16_MIN
+    },
+    {
+        "Bend override",
+        &virtual_bend_override
+    },
+    {
+        "Bend value",
+        &virtual_bend_value,
+        128,
+        INT16_MAX,
+        INT16_MIN
     },
     {
         "Volume override",
@@ -144,8 +191,8 @@ M5Config::ConfigItem ChannelOverrideSettings[] = {
     },
     {
         "Volume value",
-        &virtual_volume_override_value,
-        1,
+        &virtual_volume_value,
+        128,
         0,
         127
     }
@@ -226,20 +273,33 @@ uint8_t getSIDorFallback(uint8_t SID,bool is_percussion){
     }
     return 0;
 }
-void setChannelInstrument(uint8_t channel, u8_t instrument, bool is_percussion){
-    instrument = getSIDorFallback(instrument, is_percussion);
-    channel_instruments[channel] = instrument;
+
+
+// checks if override matches the channel override values, then applies changes.
+// override is true when changing from ui, and false from incoming midi data
+void SetChannelParameters(bool override, uint8_t channel, SynthCore::ChannelParameters parameters){
+    ChannelOverride ch_override = channels_overrides[channel];
+    if (override == ch_override.sustain_override) channels_parameters[channel].sustain = parameters.sustain;
+    if (override == ch_override.vibrato_override) channels_parameters[channel].vibrato = parameters.vibrato;
+    if (override == ch_override.volume_override) channels_parameters[channel].volume = parameters.volume;
+    synth.setChannelParameters(channel,channels_parameters[channel]);
+}
+
+void SetChannelInstrument(bool override, uint8_t channel, uint8_t instrument){
+    bool is_percussion = (channel == 9);
+    ChannelOverride ch_override = channels_overrides[channel];
+    if (override == ch_override.instrument_override) channels_sid[channel] = getSIDorFallback(instrument,is_percussion);
 }
 
 void ProcessMidi(MidiMessage msg) {
-    SynthCore::ChannelParameters params = synth.getChannelParameters(msg.channel);
+    SynthCore::ChannelParameters params = channels_parameters[msg.channel];
     bool is_percussion (msg.channel == 9);
     switch (msg.type) {
         
         case MidiType::NoteOn:
             if (msg.data2 > 0) {
                 if (!is_percussion){
-                    synth.createVoice(instruments + channel_instruments[msg.channel],msg.data1,msg.data2,msg.channel,false);
+                    synth.createVoice(instruments + channels_sid[msg.channel],msg.data1,msg.data2,msg.channel,false);
                 }
                 else {synth.createVoice(percussion + getSIDorFallback(msg.data1,true),msg.data1,msg.data2,msg.channel,true);}
             } else {
@@ -250,7 +310,7 @@ void ProcessMidi(MidiMessage msg) {
                     synth.releaseVoiceByNote(msg.data1, msg.channel);
                     break;
         case MidiType::ProgramChange:
-                    setChannelInstrument(msg.channel, getSIDorFallback(msg.data1,is_percussion), is_percussion);
+                    SetChannelInstrument(false,msg.channel,msg.data1);
                     break;
 
         case MidiType::ControlChange:
@@ -271,8 +331,8 @@ void ProcessMidi(MidiMessage msg) {
 
         default:
             break;
-    }
-    synth.setChannelParameters(msg.channel,params);
+        }
+        SetChannelParameters(false,msg.channel,params);
 }
 
 void setup_samples(){
@@ -280,19 +340,56 @@ void setup_samples(){
     instruments = fmu.getInstruments();
     percussion = fmu.getPercussion();
     sample_rate = fmu.getSampleRate();
+    synth.setup(base_note,sample_rate);
 
 }
 
+void SetOverrides(){
+    channels_overrides[channel_override_index].instrument_override = virtual_instrument_override;
+    channels_overrides[channel_override_index].sustain_override = virtual_sustain_override;
+    channels_overrides[channel_override_index].vibrato_override = virtual_vibrato_override;
+    channels_overrides[channel_override_index].bend_override = virtual_bend_override;
+    channels_overrides[channel_override_index].volume_override = virtual_volume_override;
+}
+
+void UpdateVirtualOverrides(){
+    virtual_instrument_override = channels_overrides[channel_override_index].instrument_override;
+    virtual_sustain_override = channels_overrides[channel_override_index].sustain_override;
+    virtual_vibrato_override = channels_overrides[channel_override_index].vibrato_override;
+    virtual_bend_override = channels_overrides[channel_override_index].bend_override;
+    virtual_volume_override = channels_overrides[channel_override_index].volume_override;
+
+    virtual_instrument_value = channels_sid[channel_override_index];
+    virtual_sustain_value = channels_parameters[channel_override_index].sustain;
+    virtual_vibrato_value = channels_parameters[channel_override_index].vibrato;
+    virtual_bend_value = channels_parameters[channel_override_index].pitch_bend;
+    virtual_volume_value = channels_parameters[channel_override_index].volume;
+}
 
 void OnUsage(M5Config::ConfigItem* item,M5Config::ConfigMenu* menu){
+    SynthCore::ChannelParameters parameters;
     switch (menu->id)
     {
     case 0:
-        synth.setBaseNote(base_note);
+        synth.setup(base_note,sample_rate);
         M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
         break;
     case 1:
-    
+        if (previous_channel_override_index != channel_override_index){
+            UpdateVirtualOverrides();
+            previous_channel_override_index = channel_override_index;
+            break;}
+        // set parameters
+        parameters.sustain = virtual_sustain_value;
+        parameters.vibrato = virtual_vibrato_value;
+        parameters.pitch_bend = virtual_bend_value;
+        parameters.volume = virtual_volume_value;
+
+        // sync parameters
+        SetOverrides();
+        SetChannelInstrument(true, channel_override_index, virtual_instrument_value);
+        SetChannelParameters(true, channel_override_index, parameters);
+        break;
     case 2:
         if(serial_plot){
         timerAlarmWrite(timer, serial_tx_speed, true);
