@@ -97,6 +97,14 @@ void open_sd(){
     at_sd = true;
 }
 
+void stopAllVoices(){
+    for(uint8_t channel = 0; channel < 15; channel++){
+        for(uint8_t note = 0; note < 127; note++){
+            synth.releaseVoiceByNote(note,channel);
+        }
+    }
+}
+
 M5SDE::ExplorerTheme sd_theme = {
     .directory_color = 0xf940,
     .background_color = BLACK,
@@ -104,7 +112,7 @@ M5SDE::ExplorerTheme sd_theme = {
     .selection_color = 0x5940, // dim orange
     .text_color = 0xfb40,
     .item_height = 23,
-    .item_window = 6,
+    .item_window = 5,
     .font = &fonts::FreeSans12pt7b
 };
 M5Config::ExplorerTheme config_theme = {
@@ -112,7 +120,7 @@ M5Config::ExplorerTheme config_theme = {
     .border_color = 0x2c9f,
     .selection_color = 0x06e0,
     .item_height = 23,
-    .item_window = 6,
+    .item_window = 5,
     .font = &fonts::FreeSans12pt7b
 };
 
@@ -245,6 +253,10 @@ M5Config::ConfigItem MainSettings[] = {
     {
         "Burn sample pack",
         open_sd
+    },
+    {
+        "Stop all voices",
+        stopAllVoices
     }
 };
 
@@ -366,8 +378,25 @@ void UpdateVirtualOverrides(){
     virtual_volume_value = channels_parameters[channel_override_index].volume;
 }
 
-void OnUsage(M5Config::ConfigItem* item,M5Config::ConfigMenu* menu){
+void HandleUIOverrides(){
     SynthCore::ChannelParameters parameters;
+    if (previous_channel_override_index != channel_override_index){
+        UpdateVirtualOverrides();
+        previous_channel_override_index = channel_override_index;
+        return;}
+    // set parameters
+    parameters.sustain = virtual_sustain_value;
+    parameters.vibrato = virtual_vibrato_value;
+    parameters.pitch_bend = virtual_bend_value;
+    parameters.volume = virtual_volume_value;
+
+    // sync parameters
+    SetOverrides();
+    SetChannelInstrument(true, channel_override_index, virtual_instrument_value);
+    SetChannelParameters(true, channel_override_index, parameters);
+}
+
+void OnUsage(M5Config::ConfigItem* item,M5Config::ConfigMenu* menu){
     switch (menu->id)
     {
     case 0:
@@ -375,20 +404,8 @@ void OnUsage(M5Config::ConfigItem* item,M5Config::ConfigMenu* menu){
         M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
         break;
     case 1:
-        if (previous_channel_override_index != channel_override_index){
-            UpdateVirtualOverrides();
-            previous_channel_override_index = channel_override_index;
-            break;}
-        // set parameters
-        parameters.sustain = virtual_sustain_value;
-        parameters.vibrato = virtual_vibrato_value;
-        parameters.pitch_bend = virtual_bend_value;
-        parameters.volume = virtual_volume_value;
-
-        // sync parameters
-        SetOverrides();
-        SetChannelInstrument(true, channel_override_index, virtual_instrument_value);
-        SetChannelParameters(true, channel_override_index, parameters);
+        HandleUIOverrides();
+        config.render();
         break;
     case 2:
         if(serial_plot){
