@@ -322,7 +322,6 @@ void ProcessMidi(MidiMessage msg) {
         case MidiType::ControlChange:
             if (msg.data1 == 64) {
                 params.sustain = (msg.data2 >= 64);
-                Serial.println(params.sustain);
             }
             if (msg.data1 == 7){
                 params.volume = msg.data2;
@@ -403,7 +402,7 @@ void OnUsage(M5Config::ConfigItem* item,M5Config::ConfigMenu* menu){
         break;
     case 2:
         if(serial_plot){
-        timerAlarmWrite(timer, serial_tx_speed, true);
+        timerAlarmWrite(timer, 1000000 / serial_tx_speed, true);
         timerAlarmEnable(timer);
         }
         else{if (timer) timerAlarmDisable(timer);}
@@ -516,7 +515,7 @@ void setup() {
 
     setup_samples();
 
-    timerAlarmWrite(timer, serial_tx_speed, true);
+    timerAlarmWrite(timer, 1000000 / serial_tx_speed, true);
     timerAlarmEnable(timer);
 }
 
