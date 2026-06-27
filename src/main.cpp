@@ -531,15 +531,26 @@ void loop() {
             mp.process(incomingByte);
         }
         
-    if (sendFlag) {
-        sendFlag = false;
-        for(int i = 0; i < 16; i++) {
-            int16_t val = channel_TX_buffers[i][tx_buffer_index * (sample_rate / serial_tx_speed)]; 
-            Serial.write(255);          // Header
-            Serial.write(i);            // Channel ID
-            Serial.write(val >> 8);     // High Byte (MSB)
-            Serial.write(val & 0xFF);   // Low Byte (LSB)
-        }
-        tx_buffer_index ++;
+if (sendFlag) {
+    sendFlag = false;
+    for(int i = 0; i < 16; i++) {
+        int16_t raw_val = channel_TX_buffers[i][tx_buffer_index * (sample_rate / serial_tx_speed)]; 
+        
+        // 1. Multiply in 32-bit space to prevent premature overflow
+        int32_t intermediate = (int32_t)raw_val * 3; 
+        intermediate = intermediate >> 1; // Divide by 2 (Total net scale: 1.5x)
+        
+        // 2. Clamp to int16_t boundaries
+        if (intermediate > 32767) intermediate = 32767;
+        else if (intermediate < -32768) intermediate = -32768;
+        
+        int16_t val = (int16_t)intermediate;
+
+        Serial.write(255);          
+        Serial.write(i);            
+        Serial.write(val >> 8);     
+        Serial.write(val & 0xFF);   
     }
+    tx_buffer_index++;
+}
 }
