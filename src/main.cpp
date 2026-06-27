@@ -47,7 +47,7 @@ uint8_t volume = 50;
 uint8_t base_note = 69;
 
 uint16_t serial_tx_speed = 8000;
-bool serial_plot = false;
+bool serial_plot = true;
 
 // channel overrides
 uint8_t channel_override_index = 0;
@@ -97,13 +97,7 @@ void open_sd(){
     at_sd = true;
 }
 
-void stopAllVoices(){
-    for(uint8_t channel = 0; channel < 15; channel++){
-        for(uint8_t note = 0; note < 127; note++){
-            synth.releaseVoiceByNote(note,channel);
-        }
-    }
-}
+void stopAllVoices(){synth.KillAllVoices();}
 
 M5SDE::ExplorerTheme sd_theme = {
     .directory_color = 0xf940,
@@ -501,7 +495,7 @@ void setup() {
     auto cfg = M5.config();
     M5Cardputer.begin(cfg);
     canvas.createSprite(M5.Lcd.width(), M5.Lcd.height());
-    M5.Speaker.setVolume(volume);
+    M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
 
     Serial.begin();
     timer = timerBegin(0, 80, true); 
@@ -521,6 +515,9 @@ void setup() {
     sdex.begin(&canvas,OnSelection);
 
     setup_samples();
+
+    timerAlarmWrite(timer, serial_tx_speed, true);
+    timerAlarmEnable(timer);
 }
 
 void loop() {
