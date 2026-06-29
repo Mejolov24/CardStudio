@@ -537,6 +537,7 @@ void loop() {
             int16_t val = channel_TX_buffers[i][tx_buffer_index * (sample_rate / serial_tx_speed)]; 
             Serial.write(255);          // Header
             Serial.write(i);            // Channel ID
+            if (val == 255) val = 256;
             Serial.write(val >> 8);     // High Byte (MSB)
             Serial.write(val & 0xFF);   // Low Byte (LSB)
         }
