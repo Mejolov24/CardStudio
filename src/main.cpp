@@ -531,41 +531,15 @@ void loop() {
             mp.process(incomingByte);
         }
         
-if (sendFlag) {
-    sendFlag = false;
-    
-    // 1. Calculate downsample step
-    uint32_t step_size = sample_rate / serial_tx_speed;
-    if (step_size == 0) step_size = 1; 
-
-    // 2. Calculate the target index
-    uint32_t actual_index = tx_buffer_index * step_size;
-
-    // 3. THE FIX: Clamp the index if the timer outpaces the audio DMA
-    if (actual_index >= BUFFER_SIZE) {
-        actual_index = BUFFER_SIZE - 1; // Freeze on the last frame
-    } else {
-        tx_buffer_index++; // Only increment if we haven't hit the wall
+    if (sendFlag) {
+        sendFlag = false;
+        for(int i = 0; i < 16; i++) {
+            int16_t val = channel_TX_buffers[i][tx_buffer_index * (sample_rate / serial_tx_speed)]; 
+            Serial.write(255);          // Header
+            Serial.write(i);            // Channel ID
+            Serial.write(val >> 8);     // High Byte (MSB)
+            Serial.write(val & 0xFF);   // Low Byte (LSB)
+        }
+        tx_buffer_index ++;
     }
-
-    for(int i = 0; i < 16; i++) {
-        // Now 100% safe to read
-        int16_t raw_val = channel_TX_buffers[i][actual_index]; 
-        
-        // Multiply in 32-bit space
-        int32_t intermediate = (int32_t)raw_val * 3; 
-        intermediate = intermediate >> 1; 
-        
-        // Clamp to int16_t boundaries
-        if (intermediate > 32767) intermediate = 32767;
-        else if (intermediate < -32768) intermediate = -32768;
-        
-        int16_t val = (int16_t)intermediate;
-
-        Serial.write(255);          
-        Serial.write(i);            
-        Serial.write(val >> 8);     
-        Serial.write(val & 0xFF);   
-    }
-}
 }
