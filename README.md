@@ -4,10 +4,9 @@ Kinda outdated readme.md since codebase is actively chaning and has no stable do
 A Multi app Firmware designed to turn the CardPuter ADV into a Mini Music Studio
 
 ## Hardware Limitations
-The ESP32S3 is quite fast and can do pretty much anything, but the CardPuter devkit has a small limitation: lack of PSRAM, meaning that we cannot allocate samples quickly in memory.
+The ESP32S3 is quite fast and can do pretty much anything, but the CardPuter devkit has a small limitation: lack of PSRAM, meaning that we cannot allocate samples in memory.
 So, the workaround is to use MMAP (Memory map) Where, instead of having the samples in sd card,  we generate one big .spack wich contains all of the samples. Then its burned into flash and ready to use.
-Since we utilize flash, and the StampS3A has 8MB, we are left for around 6MB for sample data, so I recomend using samples btween 8khz to 22khz.
-
+Since we utilize flash, and the StampS3A has 8MB, we are left for around 6MB for sample dat
 ## How to make my own Sample packs?
 Its quite simple, you need to use [PCM-MCU-C ](https://github.com/Mejolov24/PCM-MCU-C), wich will take your audio files and pack them in various ways.
 Since its a modular tool, you need to use it in a specific way:
