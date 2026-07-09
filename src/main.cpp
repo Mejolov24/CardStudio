@@ -287,6 +287,7 @@ void SetChannelParameters(bool override, uint8_t channel, SynthCore::ChannelPara
     ChannelOverride ch_override = channels_overrides[channel];
     if (override == ch_override.sustain_override) channels_parameters[channel].sustain = parameters.sustain;
     if (override == ch_override.vibrato_override) channels_parameters[channel].vibrato = parameters.vibrato;
+    channels_parameters[channel].pitch_bend = parameters.pitch_bend;
     if (override == ch_override.volume_override) channels_parameters[channel].volume = parameters.volume;
     synth.setChannelParameters(channel,channels_parameters[channel]);
 }
@@ -519,6 +520,15 @@ void setup() {
     timerAlarmEnable(timer);
 }
 
+void safeSend(uint8_t b) {
+    if (b == 255 || b == 254) {
+        Serial.write(254);        // Send Escape byte
+        Serial.write(b ^ 0x20);   // Send escaped byte (XORed to be safe)
+    } else {
+        Serial.write(b);
+    }
+}
+
 void loop() {
     M5Cardputer.update();
     keyHandler.KeyboardUpdate();
@@ -535,12 +545,12 @@ void loop() {
         sendFlag = false;
         for(int i = 0; i < 16; i++) {
             int16_t val = channel_TX_buffers[i][tx_buffer_index * (sample_rate / serial_tx_speed)]; 
-            Serial.write(255);          // Header
-            Serial.write(i);            // Channel ID
-            if (val == 255) val = 256;
-            Serial.write(val >> 8);     // High Byte (MSB)
-            Serial.write(val & 0xFF);   // Low Byte (LSB)
+            
+            Serial.write(255);              // Header
+            safeSend((uint8_t)i);          // Channel ID
+            safeSend((uint8_t)(val >> 8)); // MSB
+            safeSend((uint8_t)(val & 0xFF));// LSB
         }
-        tx_buffer_index ++;
+        tx_buffer_index++;
     }
 }
