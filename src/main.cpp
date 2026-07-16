@@ -1,5 +1,3 @@
-// WARNING: THIS CODE IS FOR TESTING AND DOES NOT REFLECT THE FINAL MAIN.CPP //
-
 #include <SPI.h>
 #include <SD.h>
 #include <M5Cardputer.h>
@@ -39,49 +37,11 @@ uint32_t sample_rate;
 const SampleData* instruments = nullptr;
 const SampleData* percussion = nullptr;
 
-
-bool at_settings = false;
-bool at_sd = false;
-
-uint8_t volume = 50;
-uint8_t base_note = 69;
-
-uint16_t serial_tx_speed = 8000;
-bool serial_plot = true;
-
-// channel overrides
-uint8_t channel_override_index = 0;
-uint8_t previous_channel_override_index = 0;
-
-uint8_t virtual_instrument_value = 0;
-bool virtual_sustain_value = false;
-int16_t virtual_vibrato_value = 1024;
-int16_t virtual_bend_value = 1024;
-uint8_t virtual_volume_value = 127;
-
-bool virtual_instrument_override = false;
-bool virtual_sustain_override = false;
-bool virtual_vibrato_override = false;
-bool virtual_bend_override = false;
-bool virtual_volume_override = false;
-
-struct ChannelOverride{
-    bool instrument_override = false;
-    bool sustain_override = false;
-    bool vibrato_override = false;
-    bool bend_override = false;
-    bool volume_override = false;
-};
-
-
 SynthCore::ChannelParameters channels_parameters[16];
 ChannelOverride channels_overrides[16];
 uint8_t channels_sid[16];
-//
 hw_timer_t *timer = NULL;
 
-// since double buffering is needed, i implemented channel tx buffers because buffer generation is "instant"
-// and serial plotting is not.
 #define BUFFER_SIZE 256
 int16_t _BufferA[BUFFER_SIZE];
 int16_t _BufferB[BUFFER_SIZE];
@@ -90,175 +50,54 @@ bool _buffer_index = 0;
 int16_t channel_TX_buffers[16][BUFFER_SIZE];
 uint32_t tx_buffer_index = 0;
 
-void open_sd(){
-    config.close();
-    sdex.goToAbsoluteDir("/AppData/CardStudio/samplepacks");
-    sdex.open();
-    at_sd = true;
+bool at_settings = false;
+bool at_sd = false;
+
+void setup_samples(){
+    fmu.mapSamplePack();
+    instruments = fmu.getInstruments();
+    percussion = fmu.getPercussion();
+    sample_rate = fmu.getSampleRate();
+    synth.setup(base_note,sample_rate);
+
 }
 
-void stopAllVoices(){synth.KillAllVoices();}
+void OnSelection(const char* path){
+    sdex.close();
+    at_sd = false;
+    at_settings = false;
+    canvas.setTextColor(COLOR_1);
+    canvas.drawString("Burning...",0,HEIGHT/2,TEXT_FONT);
+    canvas.pushSprite(0,0);
+    fmu.burnSamplePack(path);
+    canvas.clear();
+    canvas.pushSprite(0,0);
+    setup_samples();
+}
 
-M5SDE::ExplorerTheme sd_theme = {
-    .directory_color = 0xf940,
-    .background_color = BLACK,
-    .border_color = 0xfb40, // orange
-    .selection_color = 0x5940, // dim orange
-    .text_color = 0xfb40,
-    .item_height = 23,
-    .item_window = 5,
-    .font = &fonts::FreeSans12pt7b
-};
-M5Config::ExplorerTheme config_theme = {
-    .background_color = 0x211a, // blue
-    .border_color = 0x2c9f,
-    .selection_color = 0x06e0,
-    .item_height = 23,
-    .item_window = 5,
-    .font = &fonts::FreeSans12pt7b
-};
+volatile bool sendFlag = false;
+void IRAM_ATTR sendSample() {
+  sendFlag = true;
+}
 
+int16_t* getAudioBuffer(){
+  if (!_buffer_index) return _BufferB; 
+  else return _BufferA;
+}
 
+void updateAudioBuffer(){
+  int16_t* _current_buffer;
+  if (!_buffer_index){_current_buffer = _BufferA;}
+  else {_current_buffer = _BufferB;}
 
-M5Config::ConfigItem AudioSettings[] = {
-    {
-        "Volume", // name
-        &volume, // pointer to variable
-        10, // increment
-        0, // minimum
-        100,// maximum
-        M5Config::ScrollType::TYPE_CLAMP
-    },
-    {
-        "Base Note",
-        &base_note,
-        1,
-        0,
-        127
-    }
-};
-
-M5Config::ConfigItem ChannelOverrideSettings[] = {
-    {
-        "Channel",
-        &channel_override_index,
-        1,
-        0,
-        15
-    },
-    {
-        "Instrument override",
-        &virtual_instrument_override
-    },
-    {
-        "Instrument value",
-        &virtual_instrument_value,
-        1,
-        0,
-        127
-    },
-    {
-        "Sustain override",
-        &virtual_sustain_override
-    },
-    {
-        "Sustain value",
-        &virtual_sustain_value
-    },
-    {
-        "Vibrato override",
-        &virtual_vibrato_override
-    },
-    {
-        "Vibrato value",
-        &virtual_vibrato_value,
-        4,
-        INT16_MAX,
-        INT16_MIN
-    },
-    {
-        "Bend override",
-        &virtual_bend_override
-    },
-    {
-        "Bend value",
-        &virtual_bend_value,
-        128,
-        INT16_MAX,
-        INT16_MIN
-    },
-    {
-        "Volume override",
-        &virtual_volume_override
-    },
-    {
-        "Volume value",
-        &virtual_volume_value,
-        128,
-        0,
-        127
-    }
-};
-
-M5Config::ConfigItem IOSettings[] = {
-    {
-        "Serial plot",
-        &serial_plot
-    },
-    {
-        "Serial TX rate",
-        &serial_tx_speed,
-        1000,
-        1000,
-        44000
-    }
-};
-
-M5Config::ConfigMenu AudioMenu = {
-    .id = 0,
-    .config_items = AudioSettings, 
-    .size = sizeof(AudioSettings) / sizeof(AudioSettings[0])
-};
-M5Config::ConfigMenu ChannelOverrideMenu = {
-    .id = 1,
-    .config_items = ChannelOverrideSettings, 
-    .size = sizeof(ChannelOverrideSettings) / sizeof(ChannelOverrideSettings[0])
-};
-M5Config::ConfigMenu IOMenu = {
-    .id = 2,
-    .config_items = IOSettings, 
-    .size = sizeof(IOSettings) / sizeof(IOSettings[0])
-};
-
-
-M5Config::ConfigItem MainSettings[] = {
-    {
-        "Audio",
-        &AudioMenu
-    },
-    {
-        "Channel Overrides",
-        &ChannelOverrideMenu
-    },
-    {
-        "I/O",
-        &IOMenu
-    },
-    {
-        "Burn sample pack",
-        open_sd
-    },
-    {
-        "Stop all voices",
-        stopAllVoices
-    }
-};
-
-M5Config::ConfigMenu MainMenu = {
-    .config_items = MainSettings, 
-    .size = sizeof(MainSettings) / sizeof(MainSettings[0])
-};
-
+  for (int i = 0; i < BUFFER_SIZE; i++){
+    synth.stepAudio();
+    _current_buffer[i] = synth.master_mix;
+    for(uint16_t ch = 0; ch < 16; ch++){channel_TX_buffers[ch][i] = synth.channel_output[ch];}
+  }
+  _buffer_index = !_buffer_index;
+  tx_buffer_index = 0;
+}
 
 
 uint8_t getSIDorFallback(uint8_t SID,bool is_percussion){
@@ -339,15 +178,6 @@ void ProcessMidi(MidiMessage msg) {
             break;
         }
         SetChannelParameters(false,msg.channel,params);
-}
-
-void setup_samples(){
-    fmu.mapSamplePack();
-    instruments = fmu.getInstruments();
-    percussion = fmu.getPercussion();
-    sample_rate = fmu.getSampleRate();
-    synth.setup(base_note,sample_rate);
-
 }
 
 void SetOverrides(){
@@ -454,43 +284,6 @@ void OnKey(uint8_t key, bool pressed){
 }
 }
 
-void OnSelection(const char* path){// returns the absolute path of selected item
-    sdex.close();
-    at_sd = false;
-    at_settings = false;
-    canvas.setTextColor(COLOR_1);
-    canvas.drawString("Burning...",0,HEIGHT/2,TEXT_FONT);
-    canvas.pushSprite(0,0);
-    fmu.burnSamplePack(path);
-    canvas.clear();
-    canvas.pushSprite(0,0);
-    setup_samples();
-}
-
-volatile bool sendFlag = false;
-void IRAM_ATTR sendSample() {
-  sendFlag = true;
-}
-
-int16_t* getAudioBuffer(){
-  if (!_buffer_index) return _BufferB; 
-  else return _BufferA;
-}
-
-void updateAudioBuffer(){
-  int16_t* _current_buffer;
-  if (!_buffer_index){_current_buffer = _BufferA;}
-  else {_current_buffer = _BufferB;}
-
-  for (int i = 0; i < BUFFER_SIZE; i++){
-    synth.stepAudio();
-    _current_buffer[i] = synth.master_mix;
-    for(uint16_t ch = 0; ch < 16; ch++){channel_TX_buffers[ch][i] = synth.channel_output[ch];}
-  }
-  _buffer_index = !_buffer_index;
-  tx_buffer_index = 0;
-}
-
 void setup() {
     auto cfg = M5.config();
     M5Cardputer.begin(cfg);
@@ -520,13 +313,8 @@ void setup() {
     timerAlarmEnable(timer);
 }
 
-void safeSend(uint8_t b) {
-    if (b == 255 || b == 254) {
-        Serial.write(254);        // Send Escape byte
-        Serial.write(b ^ 0x20);   // Send escaped byte (XORed to be safe)
-    } else {
-        Serial.write(b);
-    }
+void safeSend(uint8_t byte) {
+    if (byte == 255) Serial.write(254);
 }
 
 void loop() {
