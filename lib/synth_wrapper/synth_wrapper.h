@@ -1,10 +1,10 @@
+#ifndef SYNTH_WRAPPER_h
+    #define SYNTH_WRAPPER_h
 #include <stdint.h>
 #include <SynthCore.h>
 #include <MP.h>
-SynthCore synthcore;
-MidiParser mp;
-#ifndef SYNTH_WRAPPER_h
-#define SYNTH_WRAPPER_h
+extern SynthCore synthcore;
+extern MidiParser mp;
 #ifndef BUFFER_SIZE
     #define BUFFER_SIZE 256
 #endif
@@ -29,8 +29,8 @@ class SynthWrapper{
         int16_t channel_TX_buffers[16][BUFFER_SIZE];
         uint32_t tx_buffer_index = 0;
 
-        SampleData* instruments = nullptr;
-        SampleData* percussion = nullptr;
+        const SampleData* instruments = nullptr;
+        const SampleData* percussion = nullptr;
 
         uint8_t getSIDorFallback(uint8_t SID,bool is_percussion);
 
@@ -44,6 +44,7 @@ class SynthWrapper{
         void SetChannelParameters(bool override, uint8_t channel, SynthCore::ChannelParameters parameters);
         void KillAllVoices();
         void SetChannelInstrument(bool override, uint8_t channel, uint8_t instrument);
+        void setSamplePointers(const SampleData* inst, const SampleData* perc);
         void updateAudioBuffer();
         int16_t* getAudioBuffer();
         ChannelOverride GetChannelOverrides(uint8_t channel);

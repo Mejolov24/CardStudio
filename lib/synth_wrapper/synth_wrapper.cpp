@@ -116,3 +116,15 @@ SynthCore::ChannelParameters SynthWrapper::GetChannelParameters(uint8_t channel)
 void SynthWrapper::setup(uint8_t base_note, uint16_t sampling_rate){
   synthcore.setup(base_note,sampling_rate);
 }
+
+void SynthWrapper::KillAllVoices(){
+  synthcore.KillAllVoices();
+}
+
+void SynthWrapper::setSamplePointers(const SampleData* inst, const SampleData* perc) {
+    instruments = inst;
+    percussion = perc;
+}
+uint8_t SynthWrapper::getChannelSID(uint8_t channel){
+    return channels_sid[channel];
+}
