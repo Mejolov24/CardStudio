@@ -1,4 +1,5 @@
 #include <synth_wrapper.h>
+#include <Arduino.h>
 int16_t* SynthWrapper::getAudioBuffer(){
   if (!_buffer_index) return _BufferB; 
   else return _BufferA;
@@ -14,8 +15,14 @@ void SynthWrapper::updateAudioBuffer(){
     _current_buffer[i] = synthcore.master_mix;
     for(uint16_t ch = 0; ch < 16; ch++){channel_TX_buffers[ch][i] = synthcore.channel_output[ch];}
   }
+  Serial.write(0xAA);
+  Serial.write(0xBB);
+  for (int channel_id = 0; channel_id < MAX_CHANNELS; channel_id){
+    for(int index = 0; index < BUFFER_SIZE; index){
+        Serial.write(channel_TX_buffers[channel_id][index]);
+    }
+  }
   _buffer_index = !_buffer_index;
-  tx_buffer_index = 0;
 }
 
 

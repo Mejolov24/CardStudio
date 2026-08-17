@@ -80,7 +80,8 @@ M5Menu::MenuItem AudioSettings[] = {
         &base_note,
         1,
         0,
-        127
+        127,
+        update_basenote
     }
 };
 

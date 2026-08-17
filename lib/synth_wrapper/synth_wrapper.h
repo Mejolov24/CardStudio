@@ -27,7 +27,6 @@ class SynthWrapper{
         bool _buffer_index = 0;
 
         int16_t channel_TX_buffers[16][BUFFER_SIZE];
-        uint32_t tx_buffer_index = 0;
 
         const SampleData* instruments = nullptr;
         const SampleData* percussion = nullptr;
