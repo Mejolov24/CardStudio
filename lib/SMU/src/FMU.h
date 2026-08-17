@@ -8,6 +8,8 @@
 
 class FMU {
 public:
+    using CallBack = void (*)(uint8_t);
+    static void begin(CallBack callback_);
     enum class Result : uint8_t {
         Success = 0,
         FileNotFound,
@@ -29,6 +31,7 @@ public:
     static uint32_t getBitDepth()   { return g_bit_depth; }
 
 private:
+    inline static CallBack callback = nullptr;
     struct __attribute__((packed)) SampleDataRaw {
         uint32_t name;
         uint32_t data;

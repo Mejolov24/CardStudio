@@ -1,3 +1,4 @@
+#define BUFFER_SIZE 256
 #include <stdint.h>
 #include <SPI.h>
 #include <SD.h>
@@ -8,7 +9,11 @@
 #include <M5SDE.h>
 #include <M5CADVKeyCB.h>
 #include <synth_wrapper.h>
+#include <falling_notes.h>
 
+#define FPS 30
+#define RENDER_US (1000000 / FPS)
+uint32_t lastFrameTime = 0;
 
 M5Canvas canvas(&M5.Lcd);
 M5CADVKeyCB keyHandler;
@@ -23,8 +28,32 @@ SynthWrapper synth;
 
 bool at_settings = false;
 bool at_sd = false;
+TaskHandle_t SerialTaskHandle = NULL;
+SemaphoreHandle_t synthMutex = NULL;
+int16_t serialCopyBuffer[MAX_CHANNELS][BUFFER_SIZE];
+extern void delete_all_notes();
+void stopAllVoices(){synth.KillAllVoices(); delete_all_notes();}
 
-void stopAllVoices(){synth.KillAllVoices();}
+void SerialTask(void *pvParameters){
+    while(true){
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        
+        if (xSemaphoreTake(synthMutex, portMAX_DELAY) == pdTRUE) {
+            for (int channel_id = 0; channel_id < MAX_CHANNELS; channel_id++){
+                for(int index = 0; index < BUFFER_SIZE; index++){
+                    serialCopyBuffer[channel_id][index] = synth.channel_TX_buffers[channel_id][index];
+                }
+            }
+            xSemaphoreGive(synthMutex);
+        }
+        for (int channel_id = 0; channel_id < MAX_CHANNELS; channel_id++){
+                    Serial.write(0xAA);
+                    Serial.write(0x55);
+                    Serial.write(channel_id);
+                    Serial.write((uint8_t*)serialCopyBuffer[channel_id], BUFFER_SIZE * sizeof(int16_t));
+                }
+    }
+}
 
 void render(){
     canvas.pushSprite(0,0);
@@ -40,27 +69,39 @@ void open_sd(){
 
 
 void setup_samples(){
-    fmu.mapSamplePack();
-    sample_rate = fmu.getSampleRate();
-    synth.setup(base_note,fmu.getSampleRate());
-    synth.setSamplePointers(fmu.getInstruments(), fmu.getPercussion());
+if (xSemaphoreTake(synthMutex, portMAX_DELAY) == pdTRUE) {
+        stopAllVoices();
+        fmu.mapSamplePack();
+        sample_rate = fmu.getSampleRate();
+        synth.setup(base_note, sample_rate);
+        synth.setSamplePointers(fmu.getInstruments(), fmu.getPercussion());
+        xSemaphoreGive(synthMutex);
+    }
 }
-
 void OnSelection(const char* path){
     sdex.close();
     at_sd = false;
     at_settings = false;
     canvas.setTextColor(COLOR_1);
-    canvas.drawString("Burning...",0,HEIGHT/2,TEXT_FONT);
-    canvas.pushSprite(0,0);
+    canvas.setTextDatum(textdatum_t::middle_center);
+    canvas.drawString("Preparing Flash...",WIDTH/2,HEIGHT/2,TEXT_FONT);
+    render();
     fmu.burnSamplePack(path);
-    canvas.clear();
-    canvas.pushSprite(0,0);
     setup_samples();
 }
 
-void safeSend(uint8_t byte) {
-    if (byte == 255) Serial.write(254);
+void burning_progress(uint8_t progress){
+    if(progress == 100){render(); return;}
+    uint16_t max_width = WIDTH - 32;
+    uint16_t inverse_progress = map(progress, 0, 100, 100, 0);
+    uint16_t target_width = (max_width * progress) / 100;
+    int color = (progress % 2 == 0) ? COLOR_2 : COLOR_1;
+    canvas.setTextColor(color);
+    canvas.drawRect(16, HEIGHT/2 + 32, max_width, 24,color);
+    canvas.fillRect(16, HEIGHT/2 + 32, target_width, 24,COLOR_3);
+    canvas.drawString("Burning Flash...",WIDTH/2,HEIGHT/2,TEXT_FONT);
+    canvas.drawString(String(progress),WIDTH/2,HEIGHT/2 + 46,TEXT_FONT);
+    render();
 }
 
 void OnUsage(M5Menu::MenuItem* item, M5Menu::Menu* _menu){
@@ -108,6 +149,15 @@ void OnKey(uint8_t key, bool pressed){
 
 void MidiCallback(MidiMessage msg)
 {
+    switch (msg.type) {
+        case MidiType::NoteOn:
+            if (msg.data2 > 0 and msg.channel != 9) {hold_note(msg.data1, msg.channel);}
+            else {release_note(msg.data1,msg.channel);}
+            break;
+        case MidiType::NoteOff:
+            release_note(msg.data1, msg.channel);
+            break;
+        }
     synth.ProcessMidi(msg);
 }
 
@@ -118,6 +168,17 @@ void setup() {
     M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
 
     Serial.begin();
+    while(!Serial);
+    synthMutex = xSemaphoreCreateMutex();
+    xTaskCreatePinnedToCore(
+        SerialTask,   /* Task function */
+        "SerialTX_Task",  /* Name with human-readable diagnostic value */
+        4096,             /* Stack size in bytes */
+        NULL,             /* Parameters */
+        1,                /* Priority (keep it lower than your audio generation task) */
+        &SerialTaskHandle,/* Task handle */
+        1                 /* Core ID (0 or 1) */
+    );
 
     SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
     SD.begin(SD_SPI_CS_PIN, SPI, 25000000);
@@ -131,19 +192,31 @@ void setup() {
 
     sdex.setTheme(&sd_theme);
     sdex.begin(&canvas,OnSelection);
-
+    fmu.begin(burning_progress);
     setup_samples();
 }
 
 void loop() {
+    uint32_t us = micros();
+
     M5Cardputer.update();
     keyHandler.KeyboardUpdate();
 
     if (!M5.Speaker.isPlaying()) {
+    if (xSemaphoreTake(synthMutex, portMAX_DELAY) == pdTRUE) {
         synth.updateAudioBuffer();
-        M5.Speaker.playRaw(synth.getAudioBuffer(), BUFFER_SIZE, sample_rate);}
+        xSemaphoreGive(synthMutex);
+    }
+        M5.Speaker.playRaw(synth.getAudioBuffer(), BUFFER_SIZE, sample_rate);
+        xTaskNotifyGive(SerialTaskHandle);
+    }
     while (Serial.available() > 0) {
             uint8_t incomingByte = Serial.read();
             mp.process(incomingByte);
         }
+    if (!at_settings and (us - lastFrameTime >= RENDER_US) ){
+        lastFrameTime += RENDER_US;
+        render_tick();
+        render();
+    }
 }

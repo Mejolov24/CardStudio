@@ -12,9 +12,10 @@
 #define HEIGHT 135
 #define ITEM_HEIGHT 26
 #define BG_COLOR 0x0008
-#define COLOR 0xffff
-#define COLOR_1 0xfdc0
-#define COLOR_2 0xffe0
+#define COLOR_1 WHITE
+#define COLOR_2 GREEN
+#define COLOR_3 BLUE
+
 #define TEXT_FONT &fonts::Font4 // 26 px in height
 
 extern void stopAllVoices();
@@ -46,19 +47,18 @@ bool virtual_volume_override = false;
 void update_volume(){M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));}
 void update_basenote(){synth.setup(base_note,sample_rate);}
 M5SDE::ExplorerTheme sd_theme = {
-    .directory_color = 0xf940,
+    .directory_color = YELLOW,
     .background_color = BLACK,
-    .border_color = 0xfb40, // orange
-    .selection_color = 0x5940, // dim orange
-    .text_color = 0xfb40,
+    .border_color = GREEN,
+    .selection_color = DARKCYAN,
     .item_height = 23,
     .item_window = 5,
     .font = &fonts::FreeSans12pt7b
 };
 M5Menu::MenuTheme menu_theme = {
-    .background_color = 0x211a, // blue
-    .border_color = 0x2c9f,
-    .selection_color = 0x06e0,
+    .background_color = BLACK,
+    .border_color = GREEN,
+    .selection_color = DARKGREEN,
     .item_height = 23,
     .item_window = 5,
     .font = &fonts::FreeSans12pt7b

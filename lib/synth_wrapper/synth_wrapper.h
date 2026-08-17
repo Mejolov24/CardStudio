@@ -26,8 +26,6 @@ class SynthWrapper{
         int16_t _BufferB[BUFFER_SIZE];
         bool _buffer_index = 0;
 
-        int16_t channel_TX_buffers[16][BUFFER_SIZE];
-
         const SampleData* instruments = nullptr;
         const SampleData* percussion = nullptr;
 
@@ -46,6 +44,7 @@ class SynthWrapper{
         void setSamplePointers(const SampleData* inst, const SampleData* perc);
         void updateAudioBuffer();
         int16_t* getAudioBuffer();
+        int16_t channel_TX_buffers[16][BUFFER_SIZE];
         ChannelOverride GetChannelOverrides(uint8_t channel);
         SynthCore::ChannelParameters GetChannelParameters(uint8_t channel);
         uint8_t getChannelSID(uint8_t channel);

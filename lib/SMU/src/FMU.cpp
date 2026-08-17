@@ -13,10 +13,11 @@ SampleData FMU::percussion[128];
 
 FMU::Result FMU::burnSamplePack(const char* path) {
     File file = SD.open(path);
+    size_t file_size = file.size();
     if (!file) return FMU::Result::FileNotFound;
     const esp_partition_t* part = esp_partition_find_first((esp_partition_type_t)0x40, ESP_PARTITION_SUBTYPE_ANY, "samples");
     if (!part)return FMU::Result::PartitionNotFound;
-    if (file.size() > part->size)return FMU::Result::SizeMismatch;
+    if (file_size > part->size)return FMU::Result::SizeMismatch;
     size_t erase_size = ((file.size() + 4095) / 4096) * 4096;
     esp_partition_erase_range(part, 0, erase_size);
 
@@ -27,6 +28,8 @@ FMU::Result FMU::burnSamplePack(const char* path) {
         size_t readLen = file.read(buffer, sizeof(buffer));
         esp_partition_write(part, offset, buffer, readLen);
         offset += readLen;
+        uint8_t progress = static_cast<uint8_t>((offset * 100) / file_size);
+        if (callback) callback(progress);
     }
 
     file.close();
@@ -89,4 +92,8 @@ FMU::Result FMU::mapSamplePack() {
     }
 
     return FMU::Result::Success;
+}
+
+void FMU::begin(FMU::CallBack callback_) {
+    if(callback_) callback = callback_;
 }
