@@ -10,6 +10,8 @@
 #include <M5CADVKeyCB.h>
 #include <synth_wrapper.h>
 #include <falling_notes.h>
+#include <map>
+#include "Keyboardmap.h"
 
 #define FPS 30
 #define RENDER_US (1000000 / FPS)
@@ -71,6 +73,7 @@ void open_sd(){
 void setup_samples(){
 if (xSemaphoreTake(synthMutex, portMAX_DELAY) == pdTRUE) {
         stopAllVoices();
+        delete_all_notes();
         fmu.mapSamplePack();
         sample_rate = fmu.getSampleRate();
         synth.setup(base_note, sample_rate);
@@ -108,8 +111,36 @@ void OnUsage(M5Menu::MenuItem* item, M5Menu::Menu* _menu){
     if (_menu->id == 1) {HandleUIOverrides(); menu.render();}
 }
 
+void MidiCallback(MidiMessage msg)
+{
+    switch (msg.type) {
+        case MidiType::NoteOn:
+            if (msg.data2 > 0 and msg.channel != 9) {hold_note(msg.data1, msg.channel);}
+            else {release_note(msg.data1,msg.channel);}
+            break;
+        case MidiType::NoteOff:
+            release_note(msg.data1, msg.channel);
+            break;
+        }
+    synth.ProcessMidi(msg);
+}
+
+
+void handle_virtual_piano(uint8_t key, bool pressed){
+    auto it = hidNoteMap.find(key);
+    if (it == hidNoteMap.end()) return;
+    MidiMessage virtual_midi;
+    uint8_t note_offset = hidNoteMap[key];
+    if (pressed){virtual_midi.type = MidiType::NoteOn;}
+    else{virtual_midi.type = MidiType::NoteOff;}
+    virtual_midi.channel = virtual_piano_channel;
+    virtual_midi.data1 = (virtual_piano_octave * 12) + note_offset;
+    MidiCallback(virtual_midi);
+}
+
 void OnKey(uint8_t key, bool pressed){
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    if(!at_settings and !at_sd){handle_virtual_piano(key, pressed);}
     if(status.del){
         sdex.process_input(M5SDE::Input::back);
         menu.process_input(M5Menu::Input::BACK);
@@ -144,23 +175,8 @@ void OnKey(uint8_t key, bool pressed){
 
         default:
             break;
+    }
 }
-}
-
-void MidiCallback(MidiMessage msg)
-{
-    switch (msg.type) {
-        case MidiType::NoteOn:
-            if (msg.data2 > 0 and msg.channel != 9) {hold_note(msg.data1, msg.channel);}
-            else {release_note(msg.data1,msg.channel);}
-            break;
-        case MidiType::NoteOff:
-            release_note(msg.data1, msg.channel);
-            break;
-        }
-    synth.ProcessMidi(msg);
-}
-
 void setup() {
     auto cfg = M5.config();
     M5Cardputer.begin(cfg);
@@ -168,7 +184,6 @@ void setup() {
     M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
 
     Serial.begin();
-    while(!Serial);
     synthMutex = xSemaphoreCreateMutex();
     xTaskCreatePinnedToCore(
         SerialTask,   /* Task function */
@@ -194,6 +209,7 @@ void setup() {
     sdex.begin(&canvas,OnSelection);
     fmu.begin(burning_progress);
     setup_samples();
+    lastFrameTime = micros();
 }
 
 void loop() {
@@ -208,15 +224,16 @@ void loop() {
         xSemaphoreGive(synthMutex);
     }
         M5.Speaker.playRaw(synth.getAudioBuffer(), BUFFER_SIZE, sample_rate);
-        xTaskNotifyGive(SerialTaskHandle);
+        if (serial_plot){xTaskNotifyGive(SerialTaskHandle);}
     }
     while (Serial.available() > 0) {
             uint8_t incomingByte = Serial.read();
             mp.process(incomingByte);
         }
     if (!at_settings and (us - lastFrameTime >= RENDER_US) ){
-        lastFrameTime += RENDER_US;
-        render_tick();
+        float dt = (us - lastFrameTime) / 1000000.0f;
+        lastFrameTime = us;
+        render_tick(dt);
         render();
     }
 }
