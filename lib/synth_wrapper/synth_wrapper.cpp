@@ -40,15 +40,16 @@ uint8_t SynthWrapper::getSIDorFallback(uint8_t SID,bool is_percussion){
 
 void SynthWrapper::ProcessMidi(MidiMessage msg) {
     SynthCore::ChannelParameters params = channels_parameters[msg.channel];
+    uint16_t q10_velocity = (static_cast<uint32_t>(msg.data2) * 1024) / 127;
     bool is_percussion (msg.channel == 9);
     switch (msg.type) {
         
         case MidiType::NoteOn:
             if (msg.data2 > 0) {
                 if (!is_percussion){
-                    synthcore.createVoice(instruments + channels_sid[msg.channel],msg.data1,msg.data2,msg.channel,false);
+                    synthcore.createVoice(instruments + channels_sid[msg.channel],msg.data1,q10_velocity,msg.channel,false);
                 }
-                else {synthcore.createVoice(percussion + getSIDorFallback(msg.data1,true),msg.data1,msg.data2,msg.channel,true);}
+                else {synthcore.createVoice(percussion + getSIDorFallback(msg.data1,true),msg.data1,q10_velocity,msg.channel,true);}
             } else {
                 synthcore.releaseVoiceByNote(msg.data1,msg.channel);
             }
@@ -65,7 +66,7 @@ void SynthWrapper::ProcessMidi(MidiMessage msg) {
                 params.sustain = (msg.data2 >= 64);
             }
             if (msg.data1 == 7){
-                params.volume = msg.data2;
+                    params.volume = (static_cast<uint32_t>(msg.data2) * 1024) / 127;
             }
             break;
 
@@ -87,7 +88,8 @@ void SynthWrapper::ProcessMidi(MidiMessage msg) {
 void SynthWrapper::SetChannelParameters(bool override, uint8_t channel, SynthCore::ChannelParameters parameters){
     ChannelOverride ch_override = channels_overrides[channel];
     if (override == ch_override.sustain_override) channels_parameters[channel].sustain = parameters.sustain;
-    if (override == ch_override.vibrato_override) channels_parameters[channel].vibrato = parameters.vibrato;
+    if (override == ch_override.vibrato_frequency_override) channels_parameters[channel].vibrato_frequency = parameters.vibrato_frequency;
+    if (override == ch_override.vibrato_range_override) channels_parameters[channel].vibrato_range = parameters.vibrato_range;
     channels_parameters[channel].pitch_bend = parameters.pitch_bend;
     if (override == ch_override.volume_override) channels_parameters[channel].volume = parameters.volume;
     synthcore.setChannelParameters(channel,channels_parameters[channel]);

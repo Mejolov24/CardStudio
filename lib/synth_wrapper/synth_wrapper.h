@@ -15,7 +15,8 @@ class SynthWrapper{
         struct ChannelOverride{
             bool instrument_override = false;
             bool sustain_override = false;
-            bool vibrato_override = false;
+            bool vibrato_frequency_override = false;
+            bool vibrato_range_override = false;
             bool bend_override = false;
             bool volume_override = false;
         };

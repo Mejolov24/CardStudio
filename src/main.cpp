@@ -32,28 +32,29 @@ bool at_settings = false;
 bool at_sd = false;
 TaskHandle_t SerialTaskHandle = NULL;
 SemaphoreHandle_t synthMutex = NULL;
+SemaphoreHandle_t serialSemaphore = NULL;
 int16_t serialCopyBuffer[MAX_CHANNELS][BUFFER_SIZE];
 extern void delete_all_notes();
 void stopAllVoices(){synth.KillAllVoices(); delete_all_notes();}
 
 void SerialTask(void *pvParameters){
     while(true){
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        
-        if (xSemaphoreTake(synthMutex, portMAX_DELAY) == pdTRUE) {
+        if (xSemaphoreTake(serialSemaphore, portMAX_DELAY) == pdTRUE) {
+            if (xSemaphoreTake(synthMutex, portMAX_DELAY) == pdTRUE) {
             for (int channel_id = 0; channel_id < MAX_CHANNELS; channel_id++){
                 for(int index = 0; index < BUFFER_SIZE; index++){
                     serialCopyBuffer[channel_id][index] = synth.channel_TX_buffers[channel_id][index];
                 }
             }
             xSemaphoreGive(synthMutex);
-        }
+            }
         for (int channel_id = 0; channel_id < MAX_CHANNELS; channel_id++){
                     Serial.write(0xAA);
                     Serial.write(0x55);
                     Serial.write(channel_id);
                     Serial.write((uint8_t*)serialCopyBuffer[channel_id], BUFFER_SIZE * sizeof(int16_t));
                 }
+        }
     }
 }
 
@@ -82,14 +83,55 @@ if (xSemaphoreTake(synthMutex, portMAX_DELAY) == pdTRUE) {
     }
 }
 void OnSelection(const char* path){
+    bool succes = false;
     sdex.close();
     at_sd = false;
-    at_settings = false;
     canvas.setTextColor(COLOR_1);
     canvas.setTextDatum(textdatum_t::middle_center);
     canvas.drawString("Preparing Flash...",WIDTH/2,HEIGHT/2,TEXT_FONT);
     render();
-    fmu.burnSamplePack(path);
+    FMU::Result result = fmu.burnSamplePack(path);
+    canvas.setTextColor(RED);
+    switch (result)
+    {
+    case FMU::Result::Success:
+        at_settings = false;
+        succes = true;
+        break;
+    case FMU::Result::PartitionNotFound :
+        canvas.drawString("Partition Not found!",WIDTH/2,HEIGHT/2,TEXT_FONT);
+        break;
+    case FMU::Result::FlashEraseError:
+        canvas.drawString("Flash Errase error!",WIDTH/2,HEIGHT/2,TEXT_FONT);
+        break;
+    case FMU::Result::FlashWriteError :
+        canvas.drawString("Flash Write error!",WIDTH/2,HEIGHT/2,TEXT_FONT);
+        break;
+    case FMU::Result::InvalidBankCount :
+        canvas.drawString("Invalid sample count!",WIDTH/2,HEIGHT/2,TEXT_FONT);
+        break;
+    case FMU::Result::InvalidMagic :
+        canvas.drawString("This is not an .spack!",WIDTH/2,HEIGHT/2,TEXT_FONT);
+        break;
+    case FMU::Result::MmapFailed :
+        canvas.drawString("Memory Error!",WIDTH/2,HEIGHT/2,TEXT_FONT);
+        break;
+    case FMU::Result::SizeMismatch :
+        canvas.drawString(".spack too big",WIDTH/2,HEIGHT/2,TEXT_FONT);
+        break;
+
+    default:
+        break;
+    }
+    if(!succes){
+        render();
+        delay(1000);
+        at_settings = true;
+        at_sd = true;
+        sdex.open();
+    }
+    canvas.setTextColor(WHITE);
+    render();
     setup_samples();
 }
 
@@ -100,8 +142,8 @@ void burning_progress(uint8_t progress){
     uint16_t target_width = (max_width * progress) / 100;
     int color = (progress % 2 == 0) ? COLOR_2 : COLOR_1;
     canvas.setTextColor(color);
-    canvas.drawRect(16, HEIGHT/2 + 32, max_width, 24,color);
     canvas.fillRect(16, HEIGHT/2 + 32, target_width, 24,COLOR_3);
+    canvas.drawRect(16, HEIGHT/2 + 32, max_width, 24,color);
     canvas.drawString("Burning Flash...",WIDTH/2,HEIGHT/2,TEXT_FONT);
     canvas.drawString(String(progress),WIDTH/2,HEIGHT/2 + 46,TEXT_FONT);
     render();
@@ -185,6 +227,7 @@ void setup() {
 
     Serial.begin();
     synthMutex = xSemaphoreCreateMutex();
+    serialSemaphore = xSemaphoreCreateBinary();
     xTaskCreatePinnedToCore(
         SerialTask,   /* Task function */
         "SerialTX_Task",  /* Name with human-readable diagnostic value */
@@ -224,7 +267,7 @@ void loop() {
         xSemaphoreGive(synthMutex);
     }
         M5.Speaker.playRaw(synth.getAudioBuffer(), BUFFER_SIZE, sample_rate);
-        if (serial_plot){xTaskNotifyGive(SerialTaskHandle);}
+        if (serial_plot){xSemaphoreGive(serialSemaphore);}
     }
     while (Serial.available() > 0) {
             uint8_t incomingByte = Serial.read();

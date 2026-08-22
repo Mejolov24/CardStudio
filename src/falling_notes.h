@@ -173,6 +173,7 @@ void render_tick(float dt){
     uint16_t white_key_x = white_key_index * white_key_width;
     uint16_t key_y = SCREEN_HEIGHT - note_height;
     canvas.fillRect(white_key_x,key_y, white_key_width, note_height, current_note.color);
+    canvas.drawRect(white_key_x,key_y, white_key_width, note_height, BLACK);
   }
 
   // render of black keys

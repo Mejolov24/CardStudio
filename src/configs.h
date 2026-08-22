@@ -34,18 +34,50 @@ uint8_t previous_channel_override_index = 0;
 
 uint8_t virtual_instrument_value = 0;
 bool virtual_sustain_value = false;
-int16_t virtual_vibrato_value = 1024;
+uint8_t virtual_vibrato_frequency_value = 0;
+uint8_t virtual_vibrato_range_value = 0;
 int16_t virtual_bend_value = 1024;
 uint8_t virtual_volume_value = 127;
 
 bool virtual_instrument_override = false;
 bool virtual_sustain_override = false;
-bool virtual_vibrato_override = false;
+bool virtual_vibrato_frequency_override = false;
+bool virtual_vibrato_range_override = false;
 bool virtual_bend_override = false;
 bool virtual_volume_override = false;
 
+uint8_t digital_gain = 20;
+
+uint16_t db_gain_table[24] = {
+    0,    // -40 dB (effectively mute)
+    10,   // -38 dB
+    13,   // -36 dB
+    16,   // -34 dB
+    20,   // -32 dB
+    25,   // -30 dB
+    32,   // -28 dB
+    41,   // -26 dB
+    51,   // -24 dB
+    65,   // -22 dB
+    81,   // -20 dB
+    102,  // -18 dB
+    129,  // -16 dB
+    162,  // -14 dB
+    204,  // -12 dB
+    257,  // -10 dB
+    324,  // -8 dB
+    408,  // -6 dB
+    513,  // -4 dB
+    646,  // -2 dB
+    1024, //  0 dB (Unity Gain)
+    1289, // +2 dB
+    1622, // +4 dB
+    2048  // +6 dB
+};
+
 void update_volume(){M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));}
 void update_basenote(){synth.setup(base_note,sample_rate);}
+void update_digital_gain(){synthcore.set_digital_gain(db_gain_table[digital_gain]);}
 
 String base_pitches[128] = {
     "C-1","C0","C1","C2","C3","C4","C5","C6","C7"
@@ -64,6 +96,34 @@ String midi_note_names[128] = {
     "C8",  "C#8",  "D8",  "D#8",  "E8",  "F8",  "F#8",  "G8",  "G#8",  "A8",  "A#8",  "B8",
     "C9",  "C#9",  "D9",  "D#9",  "E9",  "F9",  "F#9",  "G9"
 };
+
+String db_str_table[24] = {
+    "-40 dB",
+    "-38 dB",
+    "-36 dB",
+    "-34 dB",
+    "-32 dB",
+    "-30 dB",
+    "-28 dB",
+    "-26 dB",
+    "-24 dB",
+    "-22 dB",
+    "-20 dB",
+    "-18 dB",
+    "-16 dB",
+    "-14 dB",
+    "-12 dB",
+    "-10 dB",
+    "-8 dB",
+    "-6 dB",
+    "-4 dB",
+    "-2 dB",
+    "0 dB",
+    "+2 dB",
+    "+4 dB",
+    "+6 dB"
+};
+
 
 M5SDE::ExplorerTheme sd_theme = {
     .directory_color = YELLOW,
@@ -93,6 +153,12 @@ M5Menu::MenuItem AudioSettings[] = {
         0, // minimum
         100,// maximum
         update_volume
+    },
+    {
+        "Digital Gain",
+        &digital_gain,
+        db_str_table,
+        update_digital_gain
     },
     {
         "Base Note",
@@ -130,13 +196,26 @@ M5Menu::MenuItem ChannelOverrideSettings[] = {
         &virtual_sustain_value
     },
     {
-        "Vibrato override",
-        &virtual_vibrato_override
+        "Vibrato hz override",
+        &virtual_vibrato_frequency_override
     },
     {
-        "Vibrato value",
-        &virtual_vibrato_value,
-        4,
+        "Vibrato hz value",
+        &virtual_vibrato_frequency_value,
+        1,
+        0,
+        30
+    },
+    {
+        "Vibrato range override",
+        &virtual_vibrato_range_override
+    },
+    {
+        "Vibrato range value",
+        &virtual_vibrato_range_value,
+        1,
+        0,
+        12
     },
     {
         "Bend override",
@@ -246,13 +325,15 @@ void UpdateVirtualOverrides(){
     SynthCore::ChannelParameters channel_parameters = synth.GetChannelParameters(channel_override_index);
     virtual_instrument_override = channel_override.instrument_override;
     virtual_sustain_override = channel_override.sustain_override;
-    virtual_vibrato_override = channel_override.vibrato_override;
+    virtual_vibrato_range_override = channel_override.vibrato_range_override;
+    virtual_vibrato_frequency_override = channel_override.vibrato_frequency_override;
     virtual_bend_override = channel_override.bend_override;
     virtual_volume_override = channel_override.volume_override;
 
     virtual_instrument_value = synth.getChannelSID(channel_override_index);
     virtual_sustain_value = channel_parameters.sustain;
-    virtual_vibrato_value = channel_parameters.vibrato;
+    virtual_vibrato_range_value = channel_parameters.vibrato_range;
+    virtual_vibrato_frequency_value = channel_parameters.vibrato_frequency;
     virtual_bend_value = channel_parameters.pitch_bend;
     virtual_volume_value = channel_parameters.volume;
 }
@@ -266,13 +347,15 @@ void HandleUIOverrides(){
         return;}
     // set parameters
     parameters.sustain = virtual_sustain_value;
-    parameters.vibrato = virtual_vibrato_value;
+    parameters.vibrato_frequency = (float)virtual_vibrato_frequency_value / 100.0f;
+    parameters.vibrato_range = virtual_vibrato_range_value;
     parameters.pitch_bend = virtual_bend_value;
     parameters.volume = virtual_volume_value;
     
     override_parameters.instrument_override = virtual_instrument_override;
     override_parameters.sustain_override = virtual_sustain_override;
-    override_parameters.vibrato_override = virtual_vibrato_override;
+    override_parameters.vibrato_range_override = virtual_vibrato_range_override;
+    override_parameters.vibrato_frequency_override = virtual_vibrato_frequency_override;
     override_parameters.bend_override = virtual_bend_override;
     override_parameters.volume_override = virtual_volume_override;
 

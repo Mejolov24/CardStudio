@@ -18,6 +18,16 @@ FMU::Result FMU::burnSamplePack(const char* path) {
     const esp_partition_t* part = esp_partition_find_first((esp_partition_type_t)0x40, ESP_PARTITION_SUBTYPE_ANY, "samples");
     if (!part)return FMU::Result::PartitionNotFound;
     if (file_size > part->size)return FMU::Result::SizeMismatch;
+
+    uint8_t magic[4];
+    if (file.read(magic, 4) != 4 || memcmp(magic, "SPK1", 4) != 0) {
+        file.close();
+        return FMU::Result::InvalidMagic; // Make sure this Result enum exists!
+    }
+
+    // Reset file pointer back to the beginning so the write loop gets the whole file
+    file.seek(0);
+
     size_t erase_size = ((file.size() + 4095) / 4096) * 4096;
     esp_partition_erase_range(part, 0, erase_size);
 
