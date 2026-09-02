@@ -3,6 +3,8 @@
 #include "esp_partition.h"
 #include "FMU.h"
 
+//TODO: Make this use banks so its more midi like.
+
 uint32_t FMU::g_sample_rate = 22050;
 uint32_t FMU::g_bit_depth   = 16;
 uint32_t FMU::g_num_dirs    = 0;
@@ -73,14 +75,18 @@ FMU::Result FMU::mapSamplePack() {
     // Get offsets to the instrument and percussion tables
     uint32_t* directory = (uint32_t*)(flash_base + 16);
     uint32_t inst_offset = directory[0];
-    uint32_t perc_offset = directory[1];
+    uint32_t perc_offset = directory[128];
 
-    SampleDataRaw* flash_raw_inst = (SampleDataRaw*)(flash_base + inst_offset);
-    SampleDataRaw* flash_raw_perc = (SampleDataRaw*)(flash_base + perc_offset);
+    SampleDataRaw* flash_raw_inst = nullptr;
+    SampleDataRaw* flash_raw_perc = nullptr;
+
+    if (inst_offset != 0) {flash_raw_inst = (SampleDataRaw*)(flash_base + inst_offset);}
+
+    if (perc_offset != 0) {flash_raw_perc = (SampleDataRaw*)(flash_base + perc_offset);}
 
     for (int i = 0; i < 128; i++) {
         // Map Instrument Bank
-        if (flash_raw_inst[i].length > 0 && flash_raw_inst[i].length < 0xFFFFFF) {
+        if (flash_raw_inst && flash_raw_inst[i].length > 0 && flash_raw_inst[i].length < 0xFFFFFF) {
             instruments[i].length     = flash_raw_inst[i].length;
             instruments[i].loop_start = flash_raw_inst[i].loop_start;
             instruments[i].loop_end   = flash_raw_inst[i].loop_end;
@@ -91,7 +97,7 @@ FMU::Result FMU::mapSamplePack() {
         } else instruments[i].length = 0;
 
         // Map Percussion Bank
-        if (flash_raw_perc[i].length > 0 && flash_raw_perc[i].length < 0xFFFFFF) {
+        if (flash_raw_perc && flash_raw_perc[i].length > 0 && flash_raw_perc[i].length < 0xFFFFFF) {
             percussion[i].length     = flash_raw_perc[i].length;
             percussion[i].loop_start = flash_raw_perc[i].loop_start;
             percussion[i].loop_end   = flash_raw_perc[i].loop_end;
