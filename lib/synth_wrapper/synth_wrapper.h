@@ -36,7 +36,7 @@ class SynthWrapper{
         uint8_t channels_sid[16];
         ChannelOverride channels_overrides[16];
     public:
-        void setup(uint8_t base_note, uint16_t sampling_rate);
+        void setup(uint8_t base_note, uint16_t sampling_rate, float cents_ofsset);
         void ProcessMidi(MidiMessage msg);
         void SetChannnelOverrides(uint8_t channel, ChannelOverride overrides);
         void SetChannelParameters(bool override, uint8_t channel, SynthCore::ChannelParameters parameters);

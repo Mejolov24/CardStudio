@@ -115,8 +115,8 @@ SynthCore::ChannelParameters SynthWrapper::GetChannelParameters(uint8_t channel)
   return synthcore.getChannelParameters(channel);
 }
 
-void SynthWrapper::setup(uint8_t base_note, uint16_t sampling_rate){
-  synthcore.setup(base_note,sampling_rate);
+void SynthWrapper::setup(uint8_t base_note, uint16_t sampling_rate, float cents_ofsset){
+  synthcore.setup(base_note,sampling_rate,cents_ofsset);
 }
 
 void SynthWrapper::KillAllVoices(){

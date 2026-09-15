@@ -38,6 +38,7 @@ uint8_t virtual_vibrato_frequency_value = 0;
 uint8_t virtual_vibrato_range_value = 0;
 int16_t virtual_bend_value = 1024;
 uint8_t virtual_volume_value = 127;
+int8_t virtual_cents_offset = 0;
 
 bool virtual_instrument_override = false;
 bool virtual_sustain_override = false;
@@ -76,7 +77,7 @@ uint16_t db_gain_table[24] = {
 };
 
 void update_volume(){M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));}
-void update_basenote(){synth.setup(base_note,sample_rate);}
+void update_basenote(){synth.setup(base_note,sample_rate, (float)virtual_cents_offset);}
 void update_digital_gain(){synthcore.set_digital_gain(db_gain_table[digital_gain]);}
 
 String base_pitches[128] = {
@@ -136,8 +137,8 @@ M5SDE::ExplorerTheme sd_theme = {
 };
 M5Menu::MenuTheme menu_theme = {
     .background_color = BLACK,
-    .border_color = GREEN,
-    .selection_color = DARKGREEN,
+    .border_color = CYAN,
+    .selection_color = DARKCYAN,
     .item_height = 23,
     .item_window = 5,
     .font = &fonts::FreeSans12pt7b
@@ -164,6 +165,14 @@ M5Menu::MenuItem AudioSettings[] = {
         "Base Note",
         &base_note,
         midi_note_names,
+        update_basenote
+    },
+    {
+        "Cents Tunning",
+        &virtual_cents_offset,
+        1,
+        INT8_MIN,
+        INT8_MAX,
         update_basenote
     }
 };
@@ -281,11 +290,43 @@ M5Menu::MenuItem VirtualPianoSettings[] = {
         15
     }
 };
+extern SDState current_sd_state;
+extern MidiSD midi_sd;
+void select_midi(){
+    current_sd_state = PICK_MIDI;
+    open_sd();
+}
+void select_spack(){
+    current_sd_state = PICK_SPACK;
+    open_sd();
+}
+void play_midi(){midi_sd.set_midi_state(MidiSD::MidiState::PLAY);}
+void pause_midi(){midi_sd.set_midi_state(MidiSD::MidiState::PAUSE);}
+void stop_midi(){midi_sd.set_midi_state(MidiSD::MidiState::STOP); stopAllVoices();}
+M5Menu::MenuItem MidiSettings[] = {
+    {
+        "Select Midi File",
+        select_midi
+    },
+    {
+        "Play",
+        play_midi
+    },
+    {
+        "Pause",
+        pause_midi
+    },
+    {
+        "Stop",
+        stop_midi
+    }
+};
 
 M5Menu::Menu AudioMenu = {0, AudioSettings};
 M5Menu::Menu ChannelOverrideMenu = {1, ChannelOverrideSettings};
 M5Menu::Menu PianoRollMenu = {2, PianoRollSettings};
 M5Menu::Menu VirtualPianoMenu = {3, VirtualPianoSettings};
+M5Menu::Menu MidiMenu = {4, MidiSettings};
 M5Menu::MenuItem MainSettings[] = {
     {
         "Audio",
@@ -304,8 +345,12 @@ M5Menu::MenuItem MainSettings[] = {
         &VirtualPianoMenu
     },
     {
+        "Midi Settings",
+        &MidiMenu
+    },
+    {
         "Burn sample pack",
-        open_sd
+        select_spack
     },
     {
         "Serial plot",

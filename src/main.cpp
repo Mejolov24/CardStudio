@@ -12,6 +12,9 @@
 #include <falling_notes.h>
 #include <map>
 #include "Keyboardmap.h"
+#include <MidiSD.h>
+#include "logo.h"
+#include "boot_chime_sample.h"
 
 #define FPS 30
 #define RENDER_US (1000000 / FPS)
@@ -24,9 +27,8 @@ M5Menu menu;
 FMU fmu;
 SynthCore synthcore;
 MidiParser mp;
+MidiSD midi_sd;
 SynthWrapper synth;
-
-#include <configs.h>
 
 bool at_settings = false;
 bool at_sd = false;
@@ -36,6 +38,13 @@ SemaphoreHandle_t serialSemaphore = NULL;
 int16_t serialCopyBuffer[MAX_CHANNELS][BUFFER_SIZE];
 extern void delete_all_notes();
 void stopAllVoices(){synth.KillAllVoices(); delete_all_notes();}
+
+enum SDState{
+    PICK_SPACK,
+    PICK_MIDI
+};
+SDState current_sd_state;
+#include <configs.h>
 
 void SerialTask(void *pvParameters){
     while(true){
@@ -65,7 +74,22 @@ void render(){
 
 void open_sd(){
     menu.close();
-    sdex.goToAbsoluteDir("/AppData/CardStudio/samplepacks");
+    switch (current_sd_state)
+    {
+    case PICK_SPACK:{
+        sdex.goToAbsoluteDir("/AppData/CardStudio/samplepacks");
+        break;
+    }
+
+    case PICK_MIDI:{
+        sdex.goToAbsoluteDir("/Music/Midi");
+        break;
+    }
+    
+    default:
+        break;
+    }
+
     sdex.open();
     at_sd = true;
 }
@@ -77,15 +101,14 @@ if (xSemaphoreTake(synthMutex, portMAX_DELAY) == pdTRUE) {
         delete_all_notes();
         fmu.mapSamplePack();
         sample_rate = fmu.getSampleRate();
-        synth.setup(base_note, sample_rate);
+        synth.setup(base_note, sample_rate, (float)virtual_cents_offset);
         synth.setSamplePointers(fmu.getInstruments(), fmu.getPercussion());
         xSemaphoreGive(synthMutex);
     }
 }
-void OnSelection(const char* path){
-    bool succes = false;
-    sdex.close();
-    at_sd = false;
+
+void handle_flash_burn(const char* path){
+    bool success = false;
     canvas.setTextColor(COLOR_1);
     canvas.setTextDatum(textdatum_t::middle_center);
     canvas.drawString("Preparing Flash...",WIDTH/2,HEIGHT/2,TEXT_FONT);
@@ -96,7 +119,7 @@ void OnSelection(const char* path){
     {
     case FMU::Result::Success:
         at_settings = false;
-        succes = true;
+        success = true;
         break;
     case FMU::Result::PartitionNotFound :
         canvas.drawString("Partition Not found!",WIDTH/2,HEIGHT/2,TEXT_FONT);
@@ -123,7 +146,7 @@ void OnSelection(const char* path){
     default:
         break;
     }
-    if(!succes){
+    if(!success){
         render();
         delay(1000);
         at_settings = true;
@@ -133,6 +156,25 @@ void OnSelection(const char* path){
     canvas.setTextColor(WHITE);
     render();
     setup_samples();
+}
+
+void OnSelection(const char* path){
+    sdex.close();
+    at_sd = false;
+    switch (current_sd_state)
+    {
+    case PICK_SPACK:
+        handle_flash_burn(path);
+        break;
+    case PICK_MIDI:
+        midi_sd.load_midi(path);
+        midi_sd.set_midi_state(MidiSD::MidiState::PLAY);
+        break;
+    default:
+        break;
+    }
+    at_settings = false;
+    render();
 }
 
 void burning_progress(uint8_t progress){
@@ -219,12 +261,18 @@ void OnKey(uint8_t key, bool pressed){
             break;
     }
 }
-void setup() {
-    auto cfg = M5.config();
-    M5Cardputer.begin(cfg);
-    canvas.createSprite(M5.Lcd.width(), M5.Lcd.height());
-    M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
 
+void setup_sd(){
+    SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+    SD.begin(SD_SPI_CS_PIN, SPI, 25000000);
+    SD.mkdir("/AppData");
+    SD.mkdir("/AppData/CardStudio");
+    SD.mkdir("/Music");
+    SD.mkdir("/Music/Midi");
+
+}
+
+void setup_serial(){
     Serial.begin();
     synthMutex = xSemaphoreCreateMutex();
     serialSemaphore = xSemaphoreCreateBinary();
@@ -237,17 +285,43 @@ void setup() {
         &SerialTaskHandle,/* Task handle */
         1                 /* Core ID (0 or 1) */
     );
+}
 
-    SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
-    SD.begin(SD_SPI_CS_PIN, SPI, 25000000);
+bool at_boot = true;
 
+void bootAnimationTask(void *pvParameters){
+    M5.Speaker.setVolume(255);
+    vTaskDelay(pdMS_TO_TICKS(900)); // warmu'for speaker I2S
+    canvas.pushImage(0, 0, 240, 135, logo);
+    render();
+    synthcore.createVoice(&output[2],66,127,0);
+    synthcore.createVoice(&output[2],70,127,0);
+    synthcore.createVoice(&output[2],73,127,0);
+    synthcore.createVoice(&output[2],77,127,0);
+    vTaskDelay(pdMS_TO_TICKS(125));
+    synthcore.createVoice(&output[2],92,127,0);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    at_boot = false;
+    M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
+    synth.KillAllVoices();
+    vTaskDelete(NULL);
+}
+
+void setup() {
+    auto cfg = M5.config();
+    M5Cardputer.begin(cfg);
+    canvas.createSprite(M5.Lcd.width(), M5.Lcd.height());
+    xTaskCreate(bootAnimationTask,"BootAnim", 2048,NULL,1,NULL);
+    setup_serial();
+    setup_sd();
+
+    //callbacks
     keyHandler.SetupKeyboardCallback(OnKey);
     mp.setCallback(MidiCallback);
-
+    midi_sd.set_callback(MidiCallback);
     menu.begin(&canvas,render,OnUsage);
     menu.goToMenu(&MainMenu);
     menu.setTheme(&menu_theme);
-
     sdex.setTheme(&sd_theme);
     sdex.begin(&canvas,OnSelection);
     fmu.begin(burning_progress);
@@ -260,15 +334,17 @@ void loop() {
 
     M5Cardputer.update();
     keyHandler.KeyboardUpdate();
+    midi_sd.tick_midi(us);
 
     if (!M5.Speaker.isPlaying()) {
     if (xSemaphoreTake(synthMutex, portMAX_DELAY) == pdTRUE) {
         synth.updateAudioBuffer();
         xSemaphoreGive(synthMutex);
     }
-        M5.Speaker.playRaw(synth.getAudioBuffer(), BUFFER_SIZE, sample_rate);
+        M5.Speaker.playRaw(synth.getAudioBuffer(), BUFFER_SIZE, at_boot ? 8000 : sample_rate);
         if (serial_plot){xSemaphoreGive(serialSemaphore);}
     }
+    if(at_boot) return;
     while (Serial.available() > 0) {
             uint8_t incomingByte = Serial.read();
             mp.process(incomingByte);
