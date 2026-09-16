@@ -137,7 +137,7 @@ M5SDE::ExplorerTheme sd_theme = {
 };
 M5Menu::MenuTheme menu_theme = {
     .background_color = BLACK,
-    .border_color = CYAN,
+    .border_color = COLOR_3,
     .selection_color = DARKCYAN,
     .item_height = 23,
     .item_window = 5,
