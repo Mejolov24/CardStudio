@@ -291,15 +291,15 @@ bool at_boot = true;
 
 void bootAnimationTask(void *pvParameters){
     M5.Speaker.setVolume(255);
-    vTaskDelay(pdMS_TO_TICKS(900)); // warmu'for speaker I2S
+    vTaskDelay(pdMS_TO_TICKS(600)); // warmup for speaker I2S
     canvas.pushImage(0, 0, 240, 135, logo);
     render();
     synthcore.createVoice(&output[2],66,127,0);
     synthcore.createVoice(&output[2],70,127,0);
     synthcore.createVoice(&output[2],73,127,0);
     synthcore.createVoice(&output[2],77,127,0);
-    vTaskDelay(pdMS_TO_TICKS(125));
-    synthcore.createVoice(&output[2],92,127,0);
+    //vTaskDelay(pdMS_TO_TICKS(125));
+    //synthcore.createVoice(&output[2],92,127,0);
     vTaskDelay(pdMS_TO_TICKS(1000));
     at_boot = false;
     M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));

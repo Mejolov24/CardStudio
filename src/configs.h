@@ -70,7 +70,7 @@ uint16_t db_gain_table[24] = {
     408,  // -6 dB
     513,  // -4 dB
     646,  // -2 dB
-    1024, //  0 dB (Unity Gain)
+    1024, //  0 dB
     1289, // +2 dB
     1622, // +4 dB
     2048  // +6 dB
@@ -80,7 +80,7 @@ void update_volume(){M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));}
 void update_basenote(){synth.setup(base_note,sample_rate, (float)virtual_cents_offset);}
 void update_digital_gain(){synthcore.set_digital_gain(db_gain_table[digital_gain]);}
 
-String base_pitches[128] = {
+String base_pitches[9] = {
     "C-1","C0","C1","C2","C3","C4","C5","C6","C7"
 };
 
@@ -213,7 +213,7 @@ M5Menu::MenuItem ChannelOverrideSettings[] = {
         &virtual_vibrato_frequency_value,
         1,
         0,
-        30
+        127
     },
     {
         "Vibrato range override",

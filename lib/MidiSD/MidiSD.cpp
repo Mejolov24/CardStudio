@@ -15,23 +15,14 @@ uint32_t read_be32(File &f) {
             (uint32_t)buf[3];
 }
 
-#include <FS.h>
-#include <SD.h>
-#include <vector>
-// Safe Variable-Length Quantity reader with bounds checking
-
-
 void MidiSD::calculate_timing(uint16_t division)
 {
     // MIDI default tempo = 500000 us per quarter note
     // = 120 BPM
     uint32_t current_tempo = 500000;
-
     uint32_t current_tick = 0;
     uint64_t current_time_us = 0;
-
     uint16_t tempo_index = 0;
-
     // Sort tempo changes by tick
     std::sort(
         tempo_changes,
@@ -51,51 +42,29 @@ void MidiSD::calculate_timing(uint16_t division)
     );
 
     for (uint32_t i = 0; i < message_count; i++) {
-
         uint32_t event_tick = playback_buffer[i].ticks;
-
         // Process tempo changes before this event
         while (
             tempo_index < tempo_count &&
             tempo_changes[tempo_index].tick <= event_tick
         ) {
-
-            uint32_t tempo_tick =
-                tempo_changes[tempo_index].tick;
-
+            uint32_t tempo_tick = tempo_changes[tempo_index].tick;
             // Advance time up to the tempo change
             if (tempo_tick > current_tick) {
-
-                uint32_t delta_ticks =
-                    tempo_tick - current_tick;
-
-                current_time_us +=
-                    ((uint64_t)delta_ticks * current_tempo)
-                    / division;
-
+                uint32_t delta_ticks = tempo_tick - current_tick;
+                current_time_us += ((uint64_t)delta_ticks * current_tempo) / division;
                 current_tick = tempo_tick;
             }
-
             // Change tempo
-            current_tempo =
-                tempo_changes[tempo_index].us_per_quarter;
-
+            current_tempo = tempo_changes[tempo_index].us_per_quarter;
             tempo_index++;
         }
-
         // Advance time from current position to event
         if (event_tick > current_tick) {
-
-            uint32_t delta_ticks =
-                event_tick - current_tick;
-
-            current_time_us +=
-                ((uint64_t)delta_ticks * current_tempo)
-                / division;
-
+            uint32_t delta_ticks = event_tick - current_tick;
+            current_time_us += ((uint64_t)delta_ticks * current_tempo) / division;
             current_tick = event_tick;
         }
-
         playback_buffer[i].time_us = current_time_us;
     }
 }
@@ -104,94 +73,51 @@ void MidiSD::parse_track(File &file, uint32_t track_len, uint16_t division)
 {
     uint32_t track_start = file.position();
     uint32_t track_end = track_start + track_len;
-
     uint32_t current_ticks = 0;
     uint8_t running_status = 0;
 
     while (file.position() < track_end) {
-
         // Read delta-time VLQ
         uint32_t delta_ticks = 0;
         bool vlq_done = false;
-
         for (int i = 0; i < 4; i++) {
-
-            if (file.position() >= track_end) {
-                return;
-            }
-
+            if (file.position() >= track_end) {return;}
             uint8_t byte = file.read();
-
             delta_ticks = (delta_ticks << 7) | (byte & 0x7F);
-
-            if (!(byte & 0x80)) {
-                vlq_done = true;
-                break;
-            }
+            if (!(byte & 0x80)) {vlq_done = true; break;}
         }
-
-        if (!vlq_done) {
-            return;
-        }
+        if (!vlq_done) {return;}
 
         current_ticks += delta_ticks;
-
-        if (file.position() >= track_end) {
-            return;
-        }
-
+        if (file.position() >= track_end) {return;}
         uint8_t status = file.read();
 
         // Running status
         if (status < 0x80) {
-
-            if (running_status == 0) {
-                return;
-            }
+            if (running_status == 0) {return;}
 
             file.seek(file.position() - 1);
             status = running_status;
         }
-        else if (status < 0xF0) {
-            running_status = status;
-        }
-
+        else if (status < 0xF0) {running_status = status;}
         // Meta event
         if (status == 0xFF) {
-
-            if (file.position() >= track_end) {
-                return;
-            }
-
+            if (file.position() >= track_end) {return;}
             uint8_t meta_type = file.read();
 
             // Meta-event length
             uint32_t meta_len = 0;
             bool vlq_done = false;
-
             for (int i = 0; i < 4; i++) {
-
-                if (file.position() >= track_end) {
-                    return;
-                }
-
+                if (file.position() >= track_end) {return;}
                 uint8_t byte = file.read();
-
                 meta_len = (meta_len << 7) | (byte & 0x7F);
 
-                if (!(byte & 0x80)) {
-                    vlq_done = true;
-                    break;
-                }
+                if (!(byte & 0x80)) {vlq_done = true;break;}
             }
 
-            if (!vlq_done) {
-                return;
-            }
-
-            if (file.position() + meta_len > track_end) {
-                return;
-            }
+            if (!vlq_done) {return;}
+            if (file.position() + meta_len > track_end) {return;}
 
             // Set Tempo
             if (meta_type == 0x51 && meta_len == 3) {
@@ -202,156 +128,95 @@ void MidiSD::parse_track(File &file, uint32_t track_len, uint16_t division)
                     (uint32_t)file.read();
 
                 if (tempo_count < MAX_MIDI_TEMPOS) {
-
                     tempo_changes[tempo_count].tick = current_ticks;
-
                     tempo_changes[tempo_count].us_per_quarter = tempo;
-
                     tempo_count++;
                 }
             }
-            else {
-                file.seek(file.position() + meta_len);
-            }
-
+            else {file.seek(file.position() + meta_len);}
             // End of Track
             if (meta_type == 0x2F) {
                 file.seek(track_end);
                 return;
             }
-
             continue;
         }
 
         // SysEx
         if (status == 0xF0 || status == 0xF7) {
-
             uint32_t sysex_len = 0;
             bool vlq_done = false;
-
             for (int i = 0; i < 4; i++) {
-
-                if (file.position() >= track_end) {
-                    return;
-                }
-
+                if (file.position() >= track_end) {return;}
                 uint8_t byte = file.read();
-
                 sysex_len = (sysex_len << 7) | (byte & 0x7F);
-
-                if (!(byte & 0x80)) {
-                    vlq_done = true;
-                    break;
-                }
+                if (!(byte & 0x80)) {vlq_done = true;break;}
             }
-
-            if (!vlq_done) {
-                return;
-            }
-
-            if (file.position() + sysex_len > track_end) {
-                return;
-            }
-
+            if (!vlq_done) {return;}
+            if (file.position() + sysex_len > track_end) {return;}
             file.seek(file.position() + sysex_len);
-
             continue;
         }
 
         // MIDI channel message
         if (status >= 0x80 && status <= 0xEF) {
-
             uint8_t type = status & 0xF0;
             uint8_t channel = status & 0x0F;
-
             uint8_t data1 = 0;
             uint8_t data2 = 0;
 
-            if (file.position() >= track_end) {
-                return;
-            }
-
+            if (file.position() >= track_end) {return;}
             data1 = file.read();
-
-            if (data1 & 0x80) {
-                return;
-            }
-
+            if (data1 & 0x80) {continue;}
             // Program Change / Channel Pressure
             // only have one data byte.
             if (type != 0xC0 && type != 0xD0) {
-
-                if (file.position() >= track_end) {
-                    return;
-                }
-
+                if (file.position() >= track_end) {return;}
                 data2 = file.read();
-
-                if (data2 & 0x80) {
-                    return;
-                }
+                if (data2 & 0x80) {continue;}
             }
+            if (message_count >= MAX_MIDI_EVENTS) {return;}
 
-            if (message_count >= MAX_MIDI_EVENTS) {
-                return;
-            }
-
-            TimedMidiMessage &timed =
-                playback_buffer[message_count++];
-
+            TimedMidiMessage &timed =playback_buffer[message_count++];
             timed.ticks = current_ticks;
             timed.time_us = 0;
-
             timed.message.type = (MidiType)type;
             timed.message.channel = channel;
             timed.message.data1 = data1;
             timed.message.data2 = data2;
-
             // Note On with velocity 0 = Note Off
-            if (type == 0x90 && data2 == 0) {
-                timed.message.type = MidiType::NoteOff;
-            }
+            if (type == 0x90 && data2 == 0) {timed.message.type = MidiType::NoteOff;}
         }
 
         // System Common
         else if (status >= 0xF1 && status <= 0xF6) {
-
+            running_status = 0;
             uint8_t bytes_to_skip = 0;
-
             switch (status) {
-
                 case 0xF1:
                     bytes_to_skip = 1;
                     break;
-
                 case 0xF2:
                     bytes_to_skip = 2;
                     break;
-
                 case 0xF3:
                     bytes_to_skip = 1;
                     break;
-
                 case 0xF6:
                     bytes_to_skip = 0;
                     break;
-
                 default:
                     return;
             }
 
-            if (file.position() + bytes_to_skip > track_end) {
-                return;
-            }
-
+            if (file.position() + bytes_to_skip > track_end) {return;}
             file.seek(file.position() + bytes_to_skip);
         }
 
         else {
-            return;
+            continue;
         }
     }
-
     file.seek(track_end);
 }
 
