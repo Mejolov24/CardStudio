@@ -59,7 +59,7 @@ void SerialTask(void *pvParameters){
             }
         for (int channel_id = 0; channel_id < MAX_CHANNELS; channel_id++){
                     Serial.write(0xAA);
-                    Serial.write(0x55);
+                    Serial.write(0xBB);
                     Serial.write(channel_id);
                     Serial.write((uint8_t*)serialCopyBuffer[channel_id], BUFFER_SIZE * sizeof(int16_t));
                 }
@@ -218,8 +218,11 @@ void handle_virtual_piano(uint8_t key, bool pressed){
     if (pressed){virtual_midi.type = MidiType::NoteOn;}
     else{virtual_midi.type = MidiType::NoteOff;}
     virtual_midi.channel = virtual_piano_channel;
+    virtual_midi.data2 = 127;
     virtual_midi.data1 = (virtual_piano_octave * 12) + note_offset;
     MidiCallback(virtual_midi);
+    
+    
 }
 
 void OnKey(uint8_t key, bool pressed){
@@ -294,10 +297,10 @@ void bootAnimationTask(void *pvParameters){
     vTaskDelay(pdMS_TO_TICKS(600)); // warmup for speaker I2S
     canvas.pushImage(0, 0, 240, 135, logo);
     render();
-    synthcore.createVoice(&output[2],66,127,0);
-    synthcore.createVoice(&output[2],70,127,0);
-    synthcore.createVoice(&output[2],73,127,0);
-    synthcore.createVoice(&output[2],77,127,0);
+    synthcore.createVoice(&output[2],66,0.2f,0);
+    synthcore.createVoice(&output[2],70,0.2f,0);
+    synthcore.createVoice(&output[2],73,0.2f,0);
+    synthcore.createVoice(&output[2],77,0.2f,0);
     //vTaskDelay(pdMS_TO_TICKS(125));
     //synthcore.createVoice(&output[2],92,127,0);
     vTaskDelay(pdMS_TO_TICKS(1000));
@@ -344,7 +347,9 @@ void loop() {
         M5.Speaker.playRaw(synth.getAudioBuffer(), BUFFER_SIZE, at_boot ? 8000 : sample_rate);
         if (serial_plot){xSemaphoreGive(serialSemaphore);}
     }
+    
     if(at_boot) return;
+
     while (Serial.available() > 0) {
             uint8_t incomingByte = Serial.read();
             mp.process(incomingByte);

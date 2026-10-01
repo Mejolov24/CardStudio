@@ -40,16 +40,16 @@ uint8_t SynthWrapper::getSIDorFallback(uint8_t SID,bool is_percussion){
 
 void SynthWrapper::ProcessMidi(MidiMessage msg) {
     SynthCore::ChannelParameters params = channels_parameters[msg.channel];
-    uint16_t q10_velocity = (static_cast<uint32_t>(msg.data2) * 1024) / 127;
+    Q_TYPE Q_volume = Q_TYPE(static_cast<float>(msg.data2) / 127.0f);
     bool is_percussion (msg.channel == 9);
     switch (msg.type) {
         
         case MidiType::NoteOn:
             if (msg.data2 > 0) {
                 if (!is_percussion){
-                    synthcore.createVoice(instruments + channels_sid[msg.channel],msg.data1,q10_velocity,msg.channel,false);
+                    synthcore.createVoice(instruments + channels_sid[msg.channel],msg.data1,Q_volume,msg.channel,false);
                 }
-                else {synthcore.createVoice(percussion + getSIDorFallback(msg.data1,true),msg.data1,q10_velocity,msg.channel,true);}
+                else {synthcore.createVoice(percussion + getSIDorFallback(msg.data1,true),msg.data1,Q_volume,msg.channel,true);}
             } else {
                 synthcore.releaseVoiceByNote(msg.data1,msg.channel);
             }
@@ -66,14 +66,13 @@ void SynthWrapper::ProcessMidi(MidiMessage msg) {
                 params.sustain = (msg.data2 >= 64);
             }
             if (msg.data1 == 7){
-                    params.volume = (static_cast<uint32_t>(msg.data2) * 1024) / 127;
+                    params.volume = Q_volume;
             }
             break;
 
         case MidiType::PitchBend:{
             int16_t offset = msg.getPitchBend(); 
-            int16_t scaled_offset = offset >> 6; 
-            params.pitch_bend = 1024 + scaled_offset;
+            params.pitch_bend = Q_TYPE(static_cast<float>(offset) / 8192.0f);
             break;}
 
         default:
