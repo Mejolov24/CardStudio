@@ -1,6 +1,6 @@
-#include <MP.h>
 #include <SD.h>
 #include <algorithm>
+#include <MidiType.h>
 
 #define MAX_MIDI_EVENTS 12000
 #define MAX_MIDI_TEMPOS 100

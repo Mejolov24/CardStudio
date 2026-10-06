@@ -2,7 +2,9 @@
 #include <M5Menu.h>
 #include <M5SDE.h>
 #include <M5Unified.h>
-#include <synth_wrapper.h>
+#include <SynthCore.h>
+#include <SynthCore_Midi.h>
+
 #define SD_SPI_SCK_PIN  40
 #define SD_SPI_MISO_PIN 39
 #define SD_SPI_MOSI_PIN 14
@@ -20,7 +22,10 @@
 
 extern void stopAllVoices();
 extern void open_sd();
-extern SynthWrapper synth;
+
+extern SynthCore synthcore;
+extern SynthCoreMidi synth;
+
 uint8_t volume = 50;
 uint8_t base_note = 69;
 uint32_t sample_rate;
@@ -77,7 +82,7 @@ float db_gain_table[24] = {
 };
 
 void update_volume(){M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));}
-void update_basenote(){synth.setup(base_note,sample_rate, (float)virtual_cents_offset);}
+void update_basenote(){synthcore.setup(base_note,sample_rate, (float)virtual_cents_offset);}
 void update_digital_gain(){synthcore.set_digital_gain(db_gain_table[digital_gain]);}
 
 String base_pitches[9] = {
@@ -366,8 +371,9 @@ M5Menu::Menu MainMenu = {3, MainSettings};
 
 
 void UpdateVirtualOverrides(){
-    SynthWrapper::ChannelOverride channel_override = synth.GetChannelOverrides(channel_override_index);
+    SynthCoreMidi::ChannelOverride channel_override = synth.GetChannelOverrides(channel_override_index);
     SynthCore::ChannelParameters channel_parameters = synth.GetChannelParameters(channel_override_index);
+
     virtual_instrument_override = channel_override.instrument_override;
     virtual_sustain_override = channel_override.sustain_override;
     virtual_vibrato_range_override = channel_override.vibrato_range_override;
@@ -385,15 +391,15 @@ void UpdateVirtualOverrides(){
 
 void HandleUIOverrides(){
     SynthCore::ChannelParameters parameters;
-    SynthWrapper::ChannelOverride override_parameters;
+    SynthCoreMidi::ChannelOverride override_parameters;
     if (previous_channel_override_index != channel_override_index){
         UpdateVirtualOverrides();
         previous_channel_override_index = channel_override_index;
         return;}
     // set parameters
     parameters.sustain = virtual_sustain_value;
-    parameters.vibrato_frequency = (float)virtual_vibrato_frequency_value / 100.0f;
-    parameters.vibrato_range = virtual_vibrato_range_value;
+    parameters.vibrato_frequency = Q_TYPE((float)virtual_vibrato_frequency_value / 100.0f);
+    parameters.vibrato_range = Q_TYPE(virtual_vibrato_range_value);
     parameters.pitch_bend = virtual_bend_value;
     parameters.volume = virtual_volume_value;
     

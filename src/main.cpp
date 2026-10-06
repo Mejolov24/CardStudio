@@ -2,19 +2,25 @@
 #include <stdint.h>
 #include <SPI.h>
 #include <SD.h>
+
 #include <M5Cardputer.h>
-#include <FMU.h>
 #include <M5Menu.h>
 #include <M5Menu.h>
 #include <M5SDE.h>
 #include <M5CADVKeyCB.h>
-#include <synth_wrapper.h>
+
+#include <FMU.h>
+
 #include <falling_notes.h>
 #include <map>
 #include "Keyboardmap.h"
-#include <MidiSD.h>
 #include "logo.h"
 #include "boot_chime_sample.h"
+
+#include <SynthCore.h>
+#include <SynthCore_Midi.h>
+#include <MidiParser.h>
+#include <MidiSD.h>
 
 #define FPS 30
 #define RENDER_US (1000000 / FPS)
@@ -28,7 +34,7 @@ FMU fmu;
 SynthCore synthcore;
 MidiParser mp;
 MidiSD midi_sd;
-SynthWrapper synth;
+SynthCoreMidi synth;
 
 bool at_settings = false;
 bool at_sd = false;
@@ -37,7 +43,7 @@ SemaphoreHandle_t synthMutex = NULL;
 SemaphoreHandle_t serialSemaphore = NULL;
 int16_t serialCopyBuffer[MAX_CHANNELS][BUFFER_SIZE];
 extern void delete_all_notes();
-void stopAllVoices(){synth.KillAllVoices(); delete_all_notes();}
+void stopAllVoices(){synthcore.KillAllVoices(); delete_all_notes();}
 
 enum SDState{
     PICK_SPACK,
@@ -101,7 +107,7 @@ if (xSemaphoreTake(synthMutex, portMAX_DELAY) == pdTRUE) {
         delete_all_notes();
         fmu.mapSamplePack();
         sample_rate = fmu.getSampleRate();
-        synth.setup(base_note, sample_rate, (float)virtual_cents_offset);
+        synthcore.setup(base_note, sample_rate, (float)virtual_cents_offset);
         synth.setSamplePointers(fmu.getInstruments(), fmu.getPercussion());
         xSemaphoreGive(synthMutex);
     }
@@ -197,7 +203,8 @@ void OnUsage(M5Menu::MenuItem* item, M5Menu::Menu* _menu){
 
 void MidiCallback(MidiMessage msg)
 {
-    switch (msg.type) {
+    MidiType type = static_cast<MidiType>(msg.type);
+    switch (type) {
         case MidiType::NoteOn:
             if (msg.data2 > 0 and msg.channel != 9) {hold_note(msg.data1, msg.channel);}
             else {release_note(msg.data1,msg.channel);}
@@ -215,8 +222,8 @@ void handle_virtual_piano(uint8_t key, bool pressed){
     if (it == hidNoteMap.end()) return;
     MidiMessage virtual_midi;
     uint8_t note_offset = hidNoteMap[key];
-    if (pressed){virtual_midi.type = MidiType::NoteOn;}
-    else{virtual_midi.type = MidiType::NoteOff;}
+    if (pressed){virtual_midi.type = static_cast<uint8_t>(MidiType::NoteOn);}
+    else{virtual_midi.type = static_cast<uint8_t>(MidiType::NoteOff);}
     virtual_midi.channel = virtual_piano_channel;
     virtual_midi.data2 = 127;
     virtual_midi.data1 = (virtual_piano_octave * 12) + note_offset;
@@ -306,7 +313,7 @@ void bootAnimationTask(void *pvParameters){
     vTaskDelay(pdMS_TO_TICKS(1000));
     at_boot = false;
     M5.Speaker.setVolume(round((255.0 * (volume / 100.0))));
-    synth.KillAllVoices();
+    synthcore.KillAllVoices();
     vTaskDelete(NULL);
 }
 
@@ -317,6 +324,7 @@ void setup() {
     xTaskCreate(bootAnimationTask,"BootAnim", 2048,NULL,1,NULL);
     setup_serial();
     setup_sd();
+    synth.setup(&synthcore);
 
     //callbacks
     keyHandler.SetupKeyboardCallback(OnKey);
