@@ -48,6 +48,7 @@ int8_t virtual_cents_offset = 0;
 
 bool virtual_instrument_override = false;
 bool virtual_sustain_override = false;
+bool virtual_split_to_channel_value = false;
 bool virtual_vibrato_frequency_override = false;
 bool virtual_vibrato_range_override = false;
 bool virtual_volume_override = false;
@@ -208,6 +209,10 @@ M5Menu::MenuItem ChannelOverrideSettings[] = {
     {
         "Sustain value",
         &virtual_sustain_value
+    },
+    {
+        "Split channel",
+        &virtual_split_to_channel_value
     },
     {
         "Vibrato hz override",
@@ -379,7 +384,6 @@ void UpdateVirtualOverrides(){
     SynthCoreMidi::MidiChannelParameters parameters = synth.GetChannelParameters(channel_override_index);
     SynthCore::ChannelParameters* core_parameters = &parameters.parameters;
     SynthCoreMidi::ChannelOverride* overrides = &parameters.override_parameters;
-    SynthCoreMidi::ExtraChannelParameters* extra = &parameters.extra_parameters;
 
     virtual_instrument_override = overrides->instrument_override;
     virtual_sustain_override = overrides->sustain_override;
@@ -391,16 +395,16 @@ void UpdateVirtualOverrides(){
     virtual_sustain_value = core_parameters->sustain;
     virtual_vibrato_range_value = core_parameters->vibrato_range;
     virtual_vibrato_frequency_value = core_parameters->vibrato_frequency;
-    virtual_max_vibrato_range_value = extra->max_lfo_semitone_range;
-    virtual_max_vibrato_frequency_value = extra->max_lfo_herz;
+    virtual_max_vibrato_range_value = parameters.max_lfo_semitone_range;
+    virtual_max_vibrato_frequency_value = parameters.max_lfo_herz;
     virtual_volume_value = core_parameters->volume;
+    virtual_split_to_channel_value = parameters.split_to_channels;
 }
 
 void HandleUIOverrides(){
     SynthCoreMidi::MidiChannelParameters parameters = synth.GetChannelParameters(channel_override_index);
     SynthCore::ChannelParameters* core_parameters = &parameters.parameters;
     SynthCoreMidi::ChannelOverride* overrides = &parameters.override_parameters;
-    SynthCoreMidi::ExtraChannelParameters* extra = &parameters.extra_parameters;
 
     if (previous_channel_override_index != channel_override_index){
         UpdateVirtualOverrides();
@@ -410,10 +414,11 @@ void HandleUIOverrides(){
     core_parameters->sustain = virtual_sustain_value;
     core_parameters->vibrato_frequency = static_cast<float>(virtual_vibrato_frequency_value);
     core_parameters->vibrato_range = Q_TYPE((float)virtual_vibrato_range_value / 10.0f);
-    extra->max_lfo_herz = Q_TYPE(virtual_max_vibrato_frequency_value);
-    extra->max_lfo_semitone_range = Q_TYPE(virtual_max_vibrato_range_value);
+    parameters.max_lfo_herz = Q_TYPE(virtual_max_vibrato_frequency_value);
+    parameters.max_lfo_semitone_range = Q_TYPE(virtual_max_vibrato_range_value);
     core_parameters->volume = virtual_volume_value;
     parameters.SampleID = virtual_instrument_value;
+    parameters.split_to_channels = virtual_split_to_channel_value;
     
     overrides->instrument_override = virtual_instrument_override;
     overrides->sustain_override = virtual_sustain_override;
