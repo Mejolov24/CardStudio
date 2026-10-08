@@ -41,7 +41,8 @@ uint8_t virtual_instrument_value = 0;
 bool virtual_sustain_value = false;
 uint8_t virtual_vibrato_frequency_value = 0;
 uint8_t virtual_vibrato_range_value = 0;
-int16_t virtual_bend_value = 1024;
+uint8_t virtual_max_vibrato_frequency_value = 0;
+uint8_t virtual_max_vibrato_range_value = 0;
 uint8_t virtual_volume_value = 127;
 int8_t virtual_cents_offset = 0;
 
@@ -49,7 +50,6 @@ bool virtual_instrument_override = false;
 bool virtual_sustain_override = false;
 bool virtual_vibrato_frequency_override = false;
 bool virtual_vibrato_range_override = false;
-bool virtual_bend_override = false;
 bool virtual_volume_override = false;
 
 uint8_t digital_gain = 20;
@@ -232,13 +232,18 @@ M5Menu::MenuItem ChannelOverrideSettings[] = {
         12
     },
     {
-        "Bend override",
-        &virtual_bend_override
+        "CC vibrato range value",
+        &virtual_max_vibrato_range_value,
+        1,
+        0,
+        24
     },
     {
-        "Bend value",
-        &virtual_bend_value,
-        128,
+        "CC vibrato hz value",
+        &virtual_max_vibrato_frequency_value,
+        1,
+        0,
+        127
     },
     {
         "Volume override",
@@ -247,7 +252,7 @@ M5Menu::MenuItem ChannelOverrideSettings[] = {
     {
         "Volume value",
         &virtual_volume_value,
-        128,
+        1,
         0,
         127
     }
@@ -371,47 +376,51 @@ M5Menu::Menu MainMenu = {3, MainSettings};
 
 
 void UpdateVirtualOverrides(){
-    SynthCoreMidi::ChannelOverride channel_override = synth.GetChannelOverrides(channel_override_index);
-    SynthCore::ChannelParameters channel_parameters = synth.GetChannelParameters(channel_override_index);
+    SynthCoreMidi::MidiChannelParameters parameters = synth.GetChannelParameters(channel_override_index);
+    SynthCore::ChannelParameters* core_parameters = &parameters.parameters;
+    SynthCoreMidi::ChannelOverride* overrides = &parameters.override_parameters;
+    SynthCoreMidi::ExtraChannelParameters* extra = &parameters.extra_parameters;
 
-    virtual_instrument_override = channel_override.instrument_override;
-    virtual_sustain_override = channel_override.sustain_override;
-    virtual_vibrato_range_override = channel_override.vibrato_range_override;
-    virtual_vibrato_frequency_override = channel_override.vibrato_frequency_override;
-    virtual_bend_override = channel_override.bend_override;
-    virtual_volume_override = channel_override.volume_override;
+    virtual_instrument_override = overrides->instrument_override;
+    virtual_sustain_override = overrides->sustain_override;
+    virtual_vibrato_range_override = overrides->vibrato_range_override;
+    virtual_vibrato_frequency_override = overrides->vibrato_frequency_override;
+    virtual_volume_override = overrides->volume_override;
 
-    virtual_instrument_value = synth.getChannelSID(channel_override_index);
-    virtual_sustain_value = channel_parameters.sustain;
-    virtual_vibrato_range_value = channel_parameters.vibrato_range;
-    virtual_vibrato_frequency_value = channel_parameters.vibrato_frequency;
-    virtual_bend_value = channel_parameters.pitch_bend;
-    virtual_volume_value = channel_parameters.volume;
+    virtual_instrument_value = parameters.SampleID;
+    virtual_sustain_value = core_parameters->sustain;
+    virtual_vibrato_range_value = core_parameters->vibrato_range;
+    virtual_vibrato_frequency_value = core_parameters->vibrato_frequency;
+    virtual_max_vibrato_range_value = extra->max_lfo_semitone_range;
+    virtual_max_vibrato_frequency_value = extra->max_lfo_herz;
+    virtual_volume_value = core_parameters->volume;
 }
 
 void HandleUIOverrides(){
-    SynthCore::ChannelParameters parameters;
-    SynthCoreMidi::ChannelOverride override_parameters;
+    SynthCoreMidi::MidiChannelParameters parameters = synth.GetChannelParameters(channel_override_index);
+    SynthCore::ChannelParameters* core_parameters = &parameters.parameters;
+    SynthCoreMidi::ChannelOverride* overrides = &parameters.override_parameters;
+    SynthCoreMidi::ExtraChannelParameters* extra = &parameters.extra_parameters;
+
     if (previous_channel_override_index != channel_override_index){
         UpdateVirtualOverrides();
         previous_channel_override_index = channel_override_index;
         return;}
     // set parameters
-    parameters.sustain = virtual_sustain_value;
-    parameters.vibrato_frequency = Q_TYPE((float)virtual_vibrato_frequency_value / 100.0f);
-    parameters.vibrato_range = Q_TYPE(virtual_vibrato_range_value);
-    parameters.pitch_bend = virtual_bend_value;
-    parameters.volume = virtual_volume_value;
+    core_parameters->sustain = virtual_sustain_value;
+    core_parameters->vibrato_frequency = static_cast<float>(virtual_vibrato_frequency_value);
+    core_parameters->vibrato_range = Q_TYPE((float)virtual_vibrato_range_value / 10.0f);
+    extra->max_lfo_herz = Q_TYPE(virtual_max_vibrato_frequency_value);
+    extra->max_lfo_semitone_range = Q_TYPE(virtual_max_vibrato_range_value);
+    core_parameters->volume = virtual_volume_value;
+    parameters.SampleID = virtual_instrument_value;
     
-    override_parameters.instrument_override = virtual_instrument_override;
-    override_parameters.sustain_override = virtual_sustain_override;
-    override_parameters.vibrato_range_override = virtual_vibrato_range_override;
-    override_parameters.vibrato_frequency_override = virtual_vibrato_frequency_override;
-    override_parameters.bend_override = virtual_bend_override;
-    override_parameters.volume_override = virtual_volume_override;
+    overrides->instrument_override = virtual_instrument_override;
+    overrides->sustain_override = virtual_sustain_override;
+    overrides->vibrato_range_override = virtual_vibrato_range_override;
+    overrides->vibrato_frequency_override = virtual_vibrato_frequency_override;
+    overrides->volume_override = virtual_volume_override;
 
     // sync parameters
-    synth.SetChannnelOverrides(channel_override_index,override_parameters);
-    synth.SetChannelInstrument(true, channel_override_index, virtual_instrument_value);
     synth.SetChannelParameters(true, channel_override_index, parameters);
 }

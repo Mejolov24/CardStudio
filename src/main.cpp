@@ -289,9 +289,9 @@ void setup_serial(){
     xTaskCreatePinnedToCore(
         SerialTask,   /* Task function */
         "SerialTX_Task",  /* Name with human-readable diagnostic value */
-        4096,             /* Stack size in bytes */
+        8192,             /* Stack size in bytes */
         NULL,             /* Parameters */
-        1,                /* Priority (keep it lower than your audio generation task) */
+        12,                /* Priority (keep it lower than your audio generation task) */
         &SerialTaskHandle,/* Task handle */
         1                 /* Core ID (0 or 1) */
     );
