@@ -39,6 +39,9 @@ uint8_t previous_channel_override_index = 0;
 
 uint8_t virtual_instrument_value = 0;
 bool virtual_sustain_value = false;
+bool virtual_split_to_channel_value = false;
+bool virtual_pitch_slide_enabled = false;
+uint16_t virtual_pitch_slide_time = 10;
 uint8_t virtual_vibrato_frequency_value = 0;
 uint8_t virtual_vibrato_range_value = 0;
 uint8_t virtual_max_vibrato_frequency_value = 0;
@@ -48,7 +51,6 @@ int8_t virtual_cents_offset = 0;
 
 bool virtual_instrument_override = false;
 bool virtual_sustain_override = false;
-bool virtual_split_to_channel_value = false;
 bool virtual_vibrato_frequency_override = false;
 bool virtual_vibrato_range_override = false;
 bool virtual_volume_override = false;
@@ -213,6 +215,15 @@ M5Menu::MenuItem ChannelOverrideSettings[] = {
     {
         "Split channel",
         &virtual_split_to_channel_value
+    },
+    {
+        "Pitch slide",
+        &virtual_pitch_slide_enabled
+    },
+    {
+        "Pitch slide time",
+        &virtual_pitch_slide_time,
+        10
     },
     {
         "Vibrato hz override",
@@ -399,6 +410,8 @@ void UpdateVirtualOverrides(){
     virtual_max_vibrato_frequency_value = parameters.max_lfo_herz;
     virtual_volume_value = core_parameters->volume;
     virtual_split_to_channel_value = parameters.split_to_channels;
+    virtual_pitch_slide_enabled = parameters.pitch_slide;
+    virtual_pitch_slide_time = parameters.pitch_slide_ms;
 }
 
 void HandleUIOverrides(){
@@ -419,6 +432,8 @@ void HandleUIOverrides(){
     core_parameters->volume = virtual_volume_value;
     parameters.SampleID = virtual_instrument_value;
     parameters.split_to_channels = virtual_split_to_channel_value;
+    parameters.pitch_slide = virtual_pitch_slide_enabled;
+    parameters.pitch_slide_ms = virtual_pitch_slide_time;
     
     overrides->instrument_override = virtual_instrument_override;
     overrides->sustain_override = virtual_sustain_override;
