@@ -346,6 +346,7 @@ void loop() {
     M5Cardputer.update();
     keyHandler.KeyboardUpdate();
     midi_sd.tick_midi(us);
+    synth.process_time(millis());
 
     if (!M5.Speaker.isPlaying()) {
     if (xSemaphoreTake(synthMutex, portMAX_DELAY) == pdTRUE) {
