@@ -4,7 +4,7 @@ A PCM synthesizer for the Cardputer ADV with .spack format support
 ![thumbnail](https://raw.githubusercontent.com/Mejolov24/CardStudio/refs/heads/main/logo.png)
 
 ## Hardware Limitations
-The ESP32S3 is quite fast and can do pretty much anything, but the CardPuter has a small limitation: lack of PSRAM, meaning that we cannot allocate samples in memory.
+The ESP32S3 is quite fast and can do pretty much anything, but the Cardputer has a limitation, lack of PSRAM, meaning that we cannot allocate samples in memory.
 So, the workaround is to use MMAP (Memory map) Where, instead of having the samples in sd card,  we generate one big .spack wich contains all of the samples. Then its burned into flash and ready to use.
 Since we utilize flash, and the StampS3A has 8MB, we are left for around ~6MB for sample data (could be more, i havent checked :p)
 
@@ -15,7 +15,7 @@ Since its a modular tool, you need to use it in a specific way:
 ### Settings
 * 16 Bit Depth
 * 16 bytes of padding
-* Choose whatever sample rate you wish, i recomend anything btween 8khz to 22khz for optimal file size and quality
+* Choose whatever sample rate you wish, i recomend anything btween 16khz to 22khz for optimal file size and quality
 
 ### Conversion
 * Inside /input create two folders: /0_instruments and /128_percussion
@@ -33,11 +33,12 @@ and then convert to .spack, the output files will be at /output/sf2
 
 ## Features:
 - Serial Midi playback
-- Serial Oscilloscope View
+- Serial Transmission for SynthTracer
 - Cents tunning
 - SD Midi playback 
 - All of synthcore capabilities, such as:
     - pitch bend
+    - pitch slide
     - LFO vibrato
     - 32 Voices
     - 16 channels
@@ -46,6 +47,7 @@ and then convert to .spack, the output files will be at /output/sf2
 
 ## But, i dont have my own sample packs!
 Dont worry, get some at the growing [Open Sample Proyect](https://github.com/Mejolov24/Open-Sample-Proyect)
+The Trailer's sample pack can be found under /sample_packs/song_specific/you've_got_mail.spack
 
 ### TODO:
 - [ ] USB Midi playback
@@ -53,16 +55,16 @@ Dont worry, get some at the growing [Open Sample Proyect](https://github.com/Mej
 
 ## Toolchain
 This firmware is built around a small ecosystem of music related software/libraries that i made:
-* [SynthCore ](https://github.com/Mejolov24/SynthCore)
+* [SynthCore](https://github.com/Mejolov24/SynthCore)
 Freestanding lightweight library for multi voice pcm playback
+* [SynthCore-Midi](https://github.com/Mejolov24/SynthCore-Midi)
+Synthcore extension for midi
 * [SynthTracer](https://github.com/Mejolov24/SynthTracer)
-tool for visualizing serial channel output and sending midi packets.
+tool for visualizing serial channel output and sending midi through serial.
 * [PCM-MCU-C](https://github.com/Mejolov24/PCM-MCU-C)
 Sample converter tool for micro controllers.
 
 ## Libraries used
-* [MidiParser](https://github.com/Mejolov24/MidiParser)
-Parses Midi and sends a callback with human readable data.
 * [M5Config](https://github.com/Mejolov24/M5Config)
 UI interface for adjusting variables on M5Stack devices
 * [M5SDE](https://github.com/Mejolov24/M5SDE)
@@ -73,8 +75,6 @@ UI SD Card Explorer for M5Stack devices
 Controls the flash mmap, sample burning and loading.
 * [CADVCB](https://github.com/Mejolov24/CardStudio/tree/main/lib/M5CADVKeyCB/src) (Cardputer ADV Keyboard Callback)
 Provides a callback for when a key is pressed, allows easy control.*will a library in the future*
-* [Synth Wrapper](https://github.com/Mejolov24/CardStudio/tree/main/lib/synth_wrapper)
-Midi GM 1.0 translation layer for SynthCore. *will a library in the future*
 * [Midi SD](https://github.com/Mejolov24/CardStudio/tree/main/lib/MidiSD)
 Translates .mid sd card files onto an array of TimedMidiMessage and also handles playback. *will be separated btween sd and playback*
 
